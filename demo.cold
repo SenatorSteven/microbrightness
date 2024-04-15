@@ -1,0 +1,119 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <xcb/xcb.h>
+#include <xcb/randr.h>
+#include <xcb/xcbext.h>
+#include "cold/cold.hold"
+
+#define xcb_wait_for_reply(a, b, c) /*-*/ (xcb_wait_for_reply(a, (b).sequence, c))
+
+def struct{
+	void *data;
+	uint16 *red;
+	uint16 *green;
+	uint16 *blue;
+	uint32 size;
+	uint8 pad0[4];
+} CrtcGamma;
+
+xcb_connection_t *connection;
+xcb_screen_t *screen;
+
+local void setGamma(float brightness){
+	xcb_randr_get_screen_resources_reply_t *reply;
+	xcb_randr_output_t *output;
+	int num_output;
+	int i;
+	if(!(reply = xcb_wait_for_reply(connection, xcb_randr_get_screen_resources(connection, (*screen).root), NULL))){
+		fprintf(stderr, "Failed to get RandR resources.\n");
+		ret;
+	}
+	output = xcb_randr_get_screen_resources_outputs(reply);
+	num_output = xcb_randr_get_screen_resources_outputs_length(reply);
+	if(brightness > 1.0){
+		brightness = 1.0;
+	}
+	for(i = 0; i < num_output; inc i){
+		xcb_randr_get_crtc_gamma_reply_t *gamma;
+		xcb_randr_get_output_info_reply_t *info = xcb_wait_for_reply(connection, xcb_randr_get_output_info_unchecked(connection, *(output + i), XCB_CURRENT_TIME), NULL);
+		if(!info){
+			fprintf(stderr, "no crtc\n");
+		}else{
+			int num_crtcs = xcb_randr_get_output_info_crtcs_length(info);
+			int i;
+			xcb_randr_crtc_t *crtc = xcb_randr_get_output_info_crtcs(info);
+			xcb_randr_crtc_t currentCrtc;
+			for(i = 0; i < num_crtcs; inc i){
+				currentCrtc = *(crtc + i);
+				if(!(gamma = xcb_wait_for_reply(connection, xcb_randr_get_crtc_gamma(connection, currentCrtc), NULL))){
+					fprintf(stderr, "\tno gamma\n");
+				}else{
+					uint gammaSize = 0;
+					{
+						xcb_randr_get_crtc_gamma_size_reply_t *reply = xcb_wait_for_reply(connection, xcb_randr_get_crtc_gamma_size_unchecked(connection, currentCrtc), NULL);
+						if(!reply){
+							fprintf(stderr, "no gamma size\n");
+						}else{
+							gammaSize = (*reply).size;
+							free(reply);
+						}
+					}
+					if(!gammaSize or gammaSize > 65536){
+						fprintf(stderr, "gamma size not in range\n");
+					}else{
+						CrtcGamma crtcGamma;
+						if((crtcGamma.data = malloc(3 * sizeof(uint16) * gammaSize))){
+							uint currentGamma;
+							uint16 *red;
+							uint16 *green;
+							uint16 *blue;
+							crtcGamma.size = gammaSize;
+							crtcGamma.red = crtcGamma.data;
+							crtcGamma.green = crtcGamma.red + crtcGamma.size;
+							crtcGamma.blue = crtcGamma.green + crtcGamma.size;
+							red = crtcGamma.red;
+							green = crtcGamma.green;
+							blue = crtcGamma.blue;
+							for(currentGamma = 0; currentGamma < gammaSize; inc currentGamma){
+								double gamma = (double)currentGamma / gammaSize * brightness;
+								if(brightness < 1.0 and gamma > 1.0){
+									gamma = 1.0;
+								}
+								gamma *= 65535.0;
+								*red = gamma;
+								*green = gamma;
+								*blue = gamma;
+								inc red;
+								inc green;
+								inc blue;
+							}
+							xcb_randr_set_crtc_gamma(connection, currentCrtc, crtcGamma.size, crtcGamma.red, crtcGamma.green, crtcGamma.blue);
+							free(crtcGamma.data);
+						}
+					}
+					free(gamma);
+				}
+			}
+			free(info);
+		}
+	}
+	free(reply);
+	ret;
+}
+int main(){
+	connection = xcb_connect(NULL, NULL);
+	if(xcb_connection_has_error(connection)){
+		fprintf(stderr, "Unable to connect to the X server.\n");
+		ret 1;
+	}
+	screen = xcb_setup_roots_iterator(xcb_get_setup(connection)).data;
+
+
+
+	setGamma(1);
+
+
+
+	xcb_disconnect(connection);
+    ret 0;
+}
