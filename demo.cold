@@ -8,12 +8,12 @@
 #define xcb_wait_for_reply(a, b, c) /*-*/ (xcb_wait_for_reply(a, (b).sequence, c))
 
 def struct{
-	void *data;
-	uint16 *red;
-	uint16 *green;
-	uint16 *blue;
-	uint32 size;
-	uint8 pad0[4];
+	void * /*---*/ data;
+	uint16 * /*-*/ red;
+	uint16 * /*-*/ green;
+	uint16 * /*-*/ blue;
+	uint32 /*---*/ size;
+	uint8 /*----*/ pad0[4];
 } CrtcGamma;
 
 xcb_connection_t *connection;
@@ -30,7 +30,7 @@ local void setGamma(float brightness){
 	}
 	output = xcb_randr_get_screen_resources_outputs(reply);
 	num_output = xcb_randr_get_screen_resources_outputs_length(reply);
-	if(brightness > 1.0){
+	if(brightness < 0.0 or brightness > 1.0){
 		brightness = 1.0;
 	}
 	for(i = 0; i < num_output; inc i){
