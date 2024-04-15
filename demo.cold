@@ -115,5 +115,5 @@ int main(){
 
 
 	xcb_disconnect(connection);
-    ret 0;
+	ret 0;
 }
