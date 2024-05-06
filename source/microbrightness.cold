@@ -1,3 +1,43 @@
+/*!
+	add multi-monitor support
+
+	spawn window in (
+		  set_of_windows
+		| pointer_window_static
+		| pointer_window_dynamic
+	)
+*/
+
+/*!
+	handle monitor changes
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /*! microbrightness.cold
 
 MIT License
@@ -22,23 +62,25 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-#define _POSIX_C_SOURCE /*-*/ 200112L
-
 /*!includes:{*/
-	#include <signal.h>
 	#include <stdint.h>
+	#include "cold/cold.hold"
+	#include <signal.h>
 	#include <stdio.h>
 	#include <stdlib.h>
+	#include <string.h>
+	#include <unistd.h>
 	#include <xcb/randr.h>
 	#include <xcb/xcb.h>
-	#include "cold/cold.hold"
+	#include <xcb/xcbext.h>
+/*!}*/
 
+/*!{*/
+	const char * /*------*/ oldDefaultSinkName;
+	const char * /*------*/ defaultSinkName;
 
-
-	#include <unistd.h>
-
-
-
+	uint /*--------------*/ oldAverageBrightness;
+	uint /*--------------*/ averageBrightness;
 /*!}*/
 
 /*!user_defines:{*/
@@ -73,24 +115,21 @@ SOFTWARE. */
 
 	#define printEvent(void) /*-----------*/ _printEvent()
 	#define printUnexpectedEvent(void) /*-*/ _printUnexpectedEvent()
+
+	#define xcb_wait_for_reply(a, b, c) /*---*/ (xcb_wait_for_reply(a, (b).sequence, c))
+	#define xcb_send_event(a, b, c, d, e) /*-*/ (xcb_send_event(a, b, c, d, (void *)(e)))
 /*!}*/
 
 /*!defs:{*/
-	def uint32 /*-*/ xEventMask;
+	def struct{
+		uint16 x;
+		uint16 y;
+		uint16 width;
+		uint16 height;
+		uint32 size;
+		void *data;
+	} Texture;
 /*!}*/
-
-
-
-def struct{
-	uint16 x;
-	uint16 y;
-	uint16 width;
-	uint16 height;
-	uint32 size;
-	void *data;
-} Texture;
-
-
 
 /*!globals:{*/
 	#define xScreen /*-------*/ xcb_screen_t
@@ -100,17 +139,8 @@ def struct{
 	#define xGC /*-----------*/ xcb_gcontext_t
 	#define xDepth /*--------*/ uint8
 	#define xGenericEvent /*-*/ xcb_generic_event_t
-
-
-
 	#define xWindow /*-------*/ xcb_window_t
-
-
-
 	#define xFont /*---------*/ xcb_font_t
-
-
-
 	const char * /*----*/ programName;
 	const char * /*----*/ errorPath;
 	const char * /*----*/ connectionName;
@@ -123,60 +153,26 @@ def struct{
 	xGC /*-------------*/ gc;
 	xGenericEvent * /*-*/ event;
 	void * /*----------*/ agp0;
-
-
-
 	xWindow /*---------*/ window;
 	xFont /*-----------*/ font;
 	 int /*------------*/ x;
 	 int /*------------*/ y;
 	uint /*------------*/ width;
 	uint /*------------*/ height;
-
-
-
 	uint /*------------*/ fontX;
 	uint /*------------*/ fontY;
 	uint /*------------*/ fontWidth;
 	uint /*------------*/ fontHeight;
-
-
-
 	uint /*------------*/ duration;
-
-
-
 	uint32 /*----------*/ foreground;
 	uint32 /*----------*/ background;
-
-
-
-	xcb_colormap_t /*-------*/ colormap;
-	xVisual /*--------------*/ visual;
-	xDepth /*---------------*/ depth;
-
-
-
-	const char name[] = "brightness";
-
-
-
-	bool received;
-
-
-
+	xcb_colormap_t /*--*/ colormap;
+	xVisual /*---------*/ visual;
+	xDepth /*----------*/ depth;
+	/*!const char  left[] = "left";
+	const char right[] = "right";*/
 	const uint32 stackMode = XCB_STACK_MODE_ABOVE;
-
-
-
-	Texture base;
-
-
-
 	#undef  xWindow
-
-
-
 	#undef  xGenericEvent
 	#undef  xGC
 	#undef  xGenericError
@@ -195,54 +191,12 @@ def struct{
 	PRINTUNEXPECTEDEVENT_DEC;
 /*!}*/
 
+#define LOADTEXTURE_DEC /*---*/ local Texture loadTexture(const char *const path)
 
-
-
-
-
-
-
-
-#define QUIT_DEC /*----------*/ local void quit(const int signal)
 #define LITERAL_LENGTH(l) /*-*/ (sizeof(l) - 1)
 
+time_t seconds;
 
-
-QUIT_DEC;
-
-
-
-QUIT_DEC{
-	if(signal != SIGUSR1){
-		printError("ignoring received signal, not SIGUSR1");
-		ret;
-	}
-	received = true;
-	xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_STACK_MODE, &stackMode);
-	xcb_map_window(connection, window);
-	xcb_flush(connection);
-	ret;
-}
-
-
-
-
-
-
-
-
-
-#define LOADTEXTURE_DEC /*---------------------*/ Texture loadTexture(const char *const path)
-
-
-
-LOADTEXTURE_DEC;
-
-
-
-/*!
-	optimize this
-*/
 LOADTEXTURE_DEC{
 	Texture texture;
 	FILE *file;
@@ -294,84 +248,74 @@ LOADTEXTURE_DEC{
 		ret texture;
 	}
 }
-
-
-
-
-
-
-
-
-
-/*!
-	optimize this
-*/
-void applyTexture(Texture source, Texture destination){
-	uint sourceY;
-	uint sourceYWall;
-	uint destinationY;
-	uint destinationYWall;
-	if(source.x > destination.width or source.y > destination.height){
-		ret;
-	}
-
-
-
-	sourceY          = 0;
-	sourceYWall      = source.height;
-	destinationY     = source.y;
-	destinationYWall = destination.height;
-
-
-
-	yLoop:{
-		if(sourceY < sourceYWall and destinationY < destinationYWall){
-
-
-
-			uint sourceX          = 0;
-			uint sourceXWall      = source.width;
-			uint destinationX     = source.x;
-			uint destinationXWall = destination.width;
-
-
-
-			xLoop:{
-				if(sourceX < sourceXWall and destinationX < destinationXWall){
-
-
-
-					const uint32 *const s = (uint32 *)     source.data +      sourceY *      source.width + sourceX;
-					      uint32 *const d = (uint32 *)destination.data + destinationY * destination.width + destinationX;
-
-
-
-					const uint32 sA = *s >> 24;
-					if(sA == 255){
-						*d = *s;
-					}elif(sA){
-						const uint32 dA = (255 - sA) * (*d >> 24) / 255;
-						const uint32 a = sA + dA;
-						const uint32 r = ((*s <<  8) >> 24) * sA + ((*d <<  8) >> 24) * dA;
-						const uint32 g = ((*s << 16) >> 24) * sA + ((*d << 16) >> 24) * dA;
-						const uint32 b = ((*s << 24) >> 24) * sA + ((*d << 24) >> 24) * dA;
-						*d = (a << 24) + ((r / a) << 16) + ((g / a) << 8) + (b / a);
-					}
-
-
-
-					inc sourceX;
-					inc destinationX;
-					jmp xLoop;
+void realApplyTexture(Texture source, Texture destination){
+	bool replace = true;
+	int x = 0;
+	while(x < source.width){
+		int y = 0;
+		while(y < source.height){
+			if(*(uint32 *)source.data){
+				if(replace){
+					*(uint32 *)destination.data = *(uint32 *)source.data;
+				}else{
+					*(uint32 *)destination.data = 0x00000000;
 				}
 			}
-
-
-
-			inc sourceY;
-			inc destinationY;
-			jmp yLoop;
+			destination.data = (uint32 *)destination.data + 1;
+			source     .data = (uint32 *)source     .data + 1;
+			inc y;
 		}
+		inc x;
+	}
+	ret;
+}
+void realApplyTexture1(Texture source, Texture destination){
+	int x = 0;
+	while(x < source.width){
+		int y = 0;
+		while(y < source.height){
+			if(*(uint32 *)source.data){
+				*(uint32 *)destination.data = *(uint32 *)source.data;
+			}
+			destination.data = (uint32 *)destination.data + 1;
+			source     .data = (uint32 *)source     .data + 1;
+			inc y;
+		}
+		inc x;
+	}
+	ret;
+}
+void realApplyTexture1WithXY(int sourceX, int sourceY, int destinationX, int destinationY, Texture source, Texture destination){
+	uint32 *sourceData = (uint32 *)source.data;
+	uint32 *destinationData = (uint32 *)destination.data;
+	while(sourceX < source.width){
+		int sy = sourceY;
+		int dy = destinationY;
+		while(sy < source.height){
+			if(*(sourceData + sy * source.width + sourceX)){
+				*(destinationData + dy * destination.width + destinationX) = *(sourceData + sy * source.width + sourceX);
+			}
+			inc dy;
+			inc sy;
+		}
+		inc sourceX;
+		inc destinationX;
+	}
+	ret;
+}
+void filterTexture(Texture filter, Texture destination){
+	int x = 0;
+	while(x < filter.width){
+		int y = 0;
+		while(y < filter.height){
+			if(!*(uint32 *)filter.data){
+				*(uint32 *)destination.data = 0x00000000;
+			}
+			destination.data = (uint32 *)destination.data + 1;
+			filter     .data = (uint32 *)filter     .data + 1;
+			inc y;
+		}
+		inc x;
 	}
 	ret;
 }
@@ -384,71 +328,418 @@ void applyTexture(Texture source, Texture destination){
 
 
 
+#define BOX_SIZE /*------------*/ (111)
+
+#define BACKING_BUFFER_SIZE /*-*/ (1000)
+
+uint32 *kernelColumnRStart;
+uint32 *kernelColumnGStart;
+uint32 *kernelColumnBStart;
+
+uint32 *pixelRStart;
+uint32 *pixelGStart;
+uint32 *pixelBStart;
+
+void doubleBoxBlur(const int width, const int height, uint32 *originalData, uint32 *intermediateData, uint32 *destinationData, const int boxSize);
+
+uint32 *intermediateData;
+uint32 *data;
+
+Texture case0;
+Texture case1;
+Texture case2;
+Texture barOverlay;
+Texture wallpaper;
+
+
+
+
+
+
+
+
+
+
+#include <math.h>
+#include <sys/time.h>
+
+#define STOREMONITORS() /*---*/ local bool storeMonitors(void)
+#define GETMONITORGAMMA() /*-*/ local bool getMonitorGamma(void)
+#define SETBRIGHTNESS() /*---*/ local void setBrightness(double brightness, const int whichMonitor)
+
+def struct{
+	void * /*-----------*/ data;
+	uint16 * /*---------*/ red;
+	uint16 * /*---------*/ green;
+	uint16 * /*---------*/ blue;
+	double /*-----------*/ brightness;
+	double /*-----------*/ redGamma;
+	double /*-----------*/ greenGamma;
+	double /*-----------*/ blueGamma;
+	xcb_randr_crtc_t /*-*/ crtc;
+	uint32 /*-----------*/ gammaSize;
+} Crtc;
+
+def struct{
+	Crtc * /*-----------*/ crtcStart;
+	uint32 /*-----------*/ crtcAllocated;
+	uint32 /*-----------*/ crtcSize;
+} Monitor;
+
+local Monitor * /*----------*/ monitorStart;
+local Monitor * /*----------*/ monitorWall;
+local uint /*---------------*/ monitorAllocated;
+
+double timeLength = 1.00;
+uint frames       = 100;
+int whichMonitor  = -1;
+
+local uint findNonClamped(const uint16 *arrayCurrent, int size){
+	const uint16 *const arrayStart = arrayCurrent - size;
+	while(dec arrayCurrent >= arrayStart){
+		if(*arrayCurrent < 65535){
+			ret arrayCurrent - arrayStart;
+		}
+	}
+	ret 1;
+}
+local double doubleRound(double number){
+	double doubleNumber;
+	number *= 100;
+	doubleNumber = (int)number;
+	ret doubleNumber / 100 + (number - doubleNumber >= 0.5) * 0.01;
+}
+local double min(double x, double y){
+	if(x < y){
+		ret x;
+	}
+	ret y;
+}
+STOREMONITORS(){
+	xcb_randr_get_monitors_reply_t *reply;
+	Monitor *monitorCurrent;
+	xcb_randr_monitor_info_iterator_t iterator;
+	if(!(reply = xcb_wait_for_reply(connection, xcb_randr_get_monitors_unchecked(connection, (*screen).root, true), NULL))){
+		monitorAllocated = 1;
+		ret false;
+	}
+	monitorAllocated = (*reply).nMonitors;
+	if(!(monitorStart = malloc(monitorAllocated * sizeof(Monitor)))){
+		free(reply);
+		ret false;
+	}
+	iterator = xcb_randr_get_monitors_monitors_iterator(reply);
+	monitorCurrent = monitorStart;
+	monitorWall = monitorStart + monitorAllocated;
+	storeMonitorLoop:{
+		if(monitorCurrent < monitorWall){
+			Crtc *storedCrtcCurrent;
+			xcb_randr_get_output_info_reply_t *infoReply;
+			xcb_randr_crtc_t *crtcCurrent;
+			xcb_randr_crtc_t *crtcWall;
+			xcb_randr_output_t *outputCurrent = xcb_randr_monitor_info_outputs(iterator.data);
+			xcb_randr_output_t *outputWall = outputCurrent + xcb_randr_monitor_info_outputs_length(iterator.data);
+			jmp iterateOutputLoop;
+			iterateOutputLoop:{
+				if((infoReply = xcb_wait_for_reply(connection, xcb_randr_get_output_info_unchecked(connection, *outputCurrent, XCB_CURRENT_TIME), NULL))){
+					const uint amount = xcb_randr_get_output_info_crtcs_length(infoReply);
+					crtcCurrent = xcb_randr_get_output_info_crtcs(infoReply);
+					crtcWall = crtcCurrent + amount;
+					(*monitorCurrent).crtcStart = malloc(amount * sizeof(Crtc));
+					if(!(*monitorCurrent).crtcStart){
+						jmp iterateOutputLoopControl;
+					}
+					storedCrtcCurrent = (*monitorCurrent).crtcStart;
+					(*monitorCurrent).crtcAllocated = 0;
+					jmp iterateCRTCLoop;
+				}
+				jmp iterateOutputLoopControl;
+			}
+			iterateCRTCLoop:{
+				xcb_randr_get_crtc_info_reply_t *reply = xcb_randr_get_crtc_info_reply(connection, xcb_randr_get_crtc_info_unchecked(connection, *crtcCurrent, XCB_CURRENT_TIME), NULL);
+				if(reply){
+					if((*reply).width and (*reply).height){
+						(*storedCrtcCurrent).crtc = *crtcCurrent;
+						inc (*monitorCurrent).crtcAllocated;
+					}
+					free(reply);
+				}
+				if(inc crtcCurrent < crtcWall){
+					inc storedCrtcCurrent;
+					jmp iterateCRTCLoop;
+				}
+				free(infoReply);
+				jmp iterateOutputLoopControl;
+			}
+			iterateOutputLoopControl:{
+				if(inc outputCurrent < outputWall){
+					jmp iterateOutputLoop;
+				}
+			}
+			xcb_randr_monitor_info_next(&iterator);
+			inc monitorCurrent;
+			jmp storeMonitorLoop;
+		}
+		free(reply);
+	}
+	ret true;
+}
+GETMONITORGAMMA(){
+	#define GAMMA_COOKIE_DATA_SIZE /*-*/ (16)
+	Monitor *monitorCurrent = monitorStart;
+	xcb_randr_get_crtc_gamma_cookie_t *cookieStart;
+	xcb_randr_get_crtc_gamma_cookie_t *cookieCurrent;
+	uint gammaCookieSize = GAMMA_COOKIE_DATA_SIZE;
+	uint gammaCookieAllocated = 0;
+	if(!(cookieStart = malloc(gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t)))){
+		ret false;
+	}
+	while(monitorCurrent < monitorWall){
+		gammaCookieAllocated += (*monitorCurrent).crtcAllocated;
+		inc monitorCurrent;
+		if(gammaCookieAllocated == gammaCookieSize){
+			void *temp;
+			gammaCookieSize += GAMMA_COOKIE_DATA_SIZE;
+			if(!(temp = realloc(cookieStart, gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t)))){
+				ret false;
+			}
+			cookieStart = temp;
+		}
+	}
+	cookieCurrent = cookieStart;
+	monitorCurrent = monitorStart;
+	while(monitorCurrent < monitorWall){
+		Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
+		Crtc *crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+		while(crtcCurrent < crtcWall){
+			*cookieCurrent = xcb_randr_get_crtc_gamma(connection, (*crtcCurrent).crtc);
+			inc crtcCurrent;
+			inc cookieCurrent;
+		}
+		inc monitorCurrent;
+	}
+	cookieCurrent = cookieStart;
+	monitorCurrent = monitorStart;
+	while(monitorCurrent < monitorWall){
+		Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
+		Crtc *crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+		while(crtcCurrent < crtcWall){
+			xcb_randr_get_crtc_gamma_reply_t *gammaReply;
+			if((gammaReply = xcb_wait_for_reply(connection, *cookieCurrent, NULL))){
+				(*crtcCurrent).data = gammaReply;
+				(*crtcCurrent).red = xcb_randr_get_crtc_gamma_red(gammaReply);
+				(*crtcCurrent).green = xcb_randr_get_crtc_gamma_green(gammaReply);
+				(*crtcCurrent).blue = xcb_randr_get_crtc_gamma_blue(gammaReply);
+				(*crtcCurrent).gammaSize = xcb_randr_get_crtc_gamma_red_length(gammaReply);
+				{
+					double redGamma;
+					double greenGamma;
+					double blueGamma;
+					uint16 *red = (*crtcCurrent).red;
+					uint16 *green = (*crtcCurrent).green;
+					uint16 *blue = (*crtcCurrent).blue;
+					if((*crtcCurrent).gammaSize < 2 or (*crtcCurrent).gammaSize > 65536){
+						fprintf(stderr, "gamma size not in range [2, 65536]\n");
+					}else{
+						uint gammaSize = (*crtcCurrent).gammaSize;
+						double configuredBrightness;
+						double i1;
+						double v1;
+						double i2;
+						double v2;
+						uint middleObservation;
+						uint bestLastObservation;
+						uint lastRedObservation;
+						uint lastGreenObservation;
+						uint lastBlueObservation;
+						uint16 *bestColorArray;
+						lastRedObservation   = findNonClamped(red  , gammaSize);
+						lastGreenObservation = findNonClamped(green, gammaSize);
+						lastBlueObservation  = findNonClamped(blue , gammaSize);
+						bestColorArray = red;
+						bestLastObservation = lastRedObservation;
+						if(lastGreenObservation > bestLastObservation){
+							bestLastObservation = lastGreenObservation;
+							bestColorArray = green;
+						}
+						if(lastBlueObservation > bestLastObservation){
+							bestLastObservation = lastBlueObservation;
+							bestColorArray = blue;
+						}
+						middleObservation = bestLastObservation / 2;
+						i1 = (double)(middleObservation   + 1) / gammaSize;
+						i2 = (double)(bestLastObservation + 1) / gammaSize;
+						v1 = (double)(*(bestColorArray + middleObservation  )) / 65535;
+						v2 = (double)(*(bestColorArray + bestLastObservation)) / 65535;
+						if(doubleRound(v2) < 0.01){
+							configuredBrightness = 0.0;
+							redGamma   = 1.0;
+							greenGamma = 1.0;
+							blueGamma  = 1.0;
+						}else{
+							if(bestLastObservation + 1 == gammaSize){
+								configuredBrightness = v2;
+							}else{
+								configuredBrightness = exp((log(v2) * log(i1) - log(v1) * log(i2)) / log(i1 / i2));
+							}
+							redGamma   = log((double)red  [lastRedObservation   / 2] / configuredBrightness / 65535) / log((double)(lastRedObservation   / 2 + 1) / gammaSize);
+							greenGamma = log((double)green[lastGreenObservation / 2] / configuredBrightness / 65535) / log((double)(lastGreenObservation / 2 + 1) / gammaSize);
+							blueGamma  = log((double)blue [lastBlueObservation  / 2] / configuredBrightness / 65535) / log((double)(lastBlueObservation  / 2 + 1) / gammaSize);
+							configuredBrightness = doubleRound(configuredBrightness);
+							redGamma   = doubleRound(redGamma);
+							greenGamma = doubleRound(greenGamma);
+							blueGamma  = doubleRound(blueGamma);
+							if(!configuredBrightness) configuredBrightness = 1.0;
+							if(!redGamma)             redGamma             = 1.0;
+							if(!greenGamma)           greenGamma           = 1.0;
+							if(!blueGamma)            blueGamma            = 1.0;
+							(*crtcCurrent).brightness = configuredBrightness;
+							(*crtcCurrent).redGamma   = redGamma;
+							(*crtcCurrent).greenGamma = greenGamma;
+							(*crtcCurrent).blueGamma  = blueGamma;
+						}
+					}
+				}
+			}
+			inc crtcCurrent;
+			inc cookieCurrent;
+		}
+		inc monitorCurrent;
+	}
+	free(cookieStart);
+	ret true;
+	#undef  GAMMA_COOKIE_DATA_SIZE
+}
+SETBRIGHTNESS(){
+	Monitor *monitorCurrent = monitorStart;
+	Monitor *wall = monitorWall;
+	double brightnessOffset = brightness;
+	uint brightnessCounter = 0;
+	double average = 0.0;
+	if(whichMonitor > -1){
+		monitorCurrent += whichMonitor;
+		wall = monitorCurrent + 1;
+	}
+	while(monitorCurrent < wall){
+		Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
+		Crtc *crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+		if(!crtcCurrent){
+			jmp iterateCRTCLoopControl;
+		}
+		jmp iterateCRTCLoop;
+		iterateCRTCLoop:{
+			const double gammaSize = (*crtcCurrent).gammaSize;
+			double brightnessUsed = (*crtcCurrent).brightness + brightnessOffset;
+			uint16 *red   = (*crtcCurrent).red;
+			uint16 *green = (*crtcCurrent).green;
+			uint16 *blue  = (*crtcCurrent).blue;
+			const double gammaMinusOne = gammaSize - 1;
+			double currentGamma = 0.0;
+			if(brightnessUsed > 1.0){
+				brightnessUsed = 1.0;
+			}elif(brightnessUsed < 0.0){
+				brightnessUsed = 0.0;
+			}
+			(*crtcCurrent).brightness = brightnessUsed;
+			average += brightnessUsed;
+			inc brightnessCounter;
+			if((*crtcCurrent).redGamma == (*crtcCurrent).greenGamma and (*crtcCurrent).greenGamma == (*crtcCurrent).blueGamma){
+				jmp updateCRTCBrightness0Loop;
+				updateCRTCBrightness0Loop:{
+					*red = min(pow(currentGamma / gammaMinusOne, (*crtcCurrent).redGamma) * brightnessUsed, 1.0) * 65535;
+					*green = *red;
+					*blue = *green;
+					if(inc currentGamma < gammaSize){
+						inc red;
+						inc green;
+						inc blue;
+						jmp updateCRTCBrightness0Loop;
+					}
+				}
+			}else{
+				jmp updateCRTCBrightness1Loop;
+				updateCRTCBrightness1Loop:{
+					const double value = currentGamma / gammaMinusOne;
+					*red   = min(pow(value, (*crtcCurrent).redGamma  ) * brightnessUsed, 1.0) * 65535;
+					*green = min(pow(value, (*crtcCurrent).greenGamma) * brightnessUsed, 1.0) * 65535;
+					*blue  = min(pow(value, (*crtcCurrent).blueGamma ) * brightnessUsed, 1.0) * 65535;
+					if(inc currentGamma < gammaSize){
+						inc red;
+						inc green;
+						inc blue;
+						jmp updateCRTCBrightness1Loop;
+					}
+				}
+			}
+			xcb_randr_set_crtc_gamma(connection, (*crtcCurrent).crtc, (*crtcCurrent).gammaSize, (*crtcCurrent).red, (*crtcCurrent).green, (*crtcCurrent).blue);
+			xcb_flush(connection);
+			jmp iterateCRTCLoopControl;
+		}
+		iterateCRTCLoopControl:{
+			if(inc crtcCurrent < crtcWall){
+				jmp iterateCRTCLoop;
+			}
+		}
+		inc monitorCurrent;
+	}
+	averageBrightness = average * 100 / brightnessCounter;
+	ret;
+}
+
+
+
+
+
+
+
+
+
 int main(const int argumentAmount, const char *const *argument){
+	(void)argumentAmount;
 	jmp main;
-
-
-
-
-
-
-
-
-
 	main:{
-		(void)argumentAmount;
-
-
-
-		width  = 300;
-		height = 300;
+		duration = 3;
+		foreground = 0xFF292929;
+		background = 0xFFE5E5E3;
+		case0      = loadTexture("/home/steven/Documents/microbrightness/assets/bars_unfilled.bmp");
+		case1      = loadTexture("/home/steven/Documents/microbrightness/assets/bars_unfilled.bmp");
+		case2      = loadTexture("/home/steven/Documents/microbrightness/assets/bars_unfilled.bmp");
+		barOverlay = loadTexture("/home/steven/Documents/microbrightness/assets/bars_filled.bmp");
+		wallpaper  = loadTexture("/home/steven/Documents/microbrightness/assets/wallpaper.bmp");
+		{
+			Texture sun = loadTexture("/home/steven/Documents/microbrightness/assets/sun.bmp");
+			realApplyTexture(sun, case0);
+			realApplyTexture(sun, case1);
+			realApplyTexture(sun, case2);
+			free(sun.data);
+		}
+		{
+			Texture plus = loadTexture("/home/steven/Documents/microbrightness/assets/plus.bmp");
+			realApplyTexture(plus, case1);
+			free(plus.data);
+		}
+		{
+			Texture minus = loadTexture("/home/steven/Documents/microbrightness/assets/minus.bmp");
+			realApplyTexture(minus, case2);
+			free(minus.data);
+		}
+		width  = case0.width;
+		height = case0.height;
 		x      = (1920 - width ) / 2;
 		y      = (1080 - height) / 2 + height;
+		intermediateData = malloc(width * height * sizeof(uint32));
+		data             = malloc(width * height * sizeof(uint32));
 
+		kernelColumnRStart = malloc(BOX_SIZE + 2 * width * sizeof(uint32));
+		kernelColumnGStart = malloc(BOX_SIZE + 2 * width * sizeof(uint32));
+		kernelColumnBStart = malloc(BOX_SIZE + 2 * width * sizeof(uint32));
 
-
-		duration = 2;
-		received = false;
-
-
-
-		foreground = 0xFFFFFFFF;
-		background = 0xFF000000;
-
-
-
-		base = loadTexture("/home/steven/Documents/microbrightness/assets/wallpaper.bmp");
-		{
-			Texture brightness = loadTexture("/home/steven/Documents/microbrightness/assets/brightness.bmp");
-			{
-				const uint xPercent = 50;
-				const uint yPercent = 30;
-				brightness.x = (base.width  - brightness.width ) * xPercent / 100;
-				brightness.y = (base.height - brightness.height) * yPercent / 100;
-				applyTexture(brightness, base);
-			}
-			free(brightness.data);
-		}
-
-
-
-
-
-
-
-
+		pixelRStart = malloc(BOX_SIZE + 2 * width * height * sizeof(uint32));
+		pixelGStart = malloc(BOX_SIZE + 2 * width * height * sizeof(uint32));
+		pixelBStart = malloc(BOX_SIZE + 2 * width * height * sizeof(uint32));
 
 		jmp setPrimaryGlobals;
 	}
-
-
-
-
-
-
-
-
-
 	setPrimaryGlobals:{
 		programName /*---------*/ = *argument;
 		errorPath /*-----------*/ = NULL;
@@ -462,15 +753,6 @@ int main(const int argumentAmount, const char *const *argument){
 		quitMessage /*---------*/ = NULL;
 		jmp establishServerConnection;
 	}
-
-
-
-
-
-
-
-
-
 	establishServerConnection:{
 		#define ESTABLISHSERVERCONNECTION_CONNECTION /*-----*/ connection
 		#define ESTABLISHSERVERCONNECTION_CONNECTIONNAME /*-*/ connectionName
@@ -482,15 +764,6 @@ int main(const int argumentAmount, const char *const *argument){
 			off: /*--------------------*/ printConnectionError(); /*-----------------------------------------*/ jmp mainEmergencyExit;
 		end
 	}
-
-
-
-
-
-
-
-
-
 	generateIDs:{
 		font /*-----*/ = xcb_generate_id(connection);
 		gc /*-------*/ = xcb_generate_id(connection);
@@ -498,35 +771,17 @@ int main(const int argumentAmount, const char *const *argument){
 		colormap /*-*/ = xcb_generate_id(connection);
 		jmp setupScreenProfile;
 	}
-
-
-
-
-
-
-
-
-
 	setupScreenProfile:{
 		#define SETUPSCREENPROFILE_VISUAL /*-*/ visual
 		#define SETUPSCREENPROFILE_DEPTH /*--*/ depth
 		#include "xcb/setupScreenProfile.hold"
 		jmp createWindow;
 	}
-
-
-
-
-
-
-
-
-
 	createWindow:{
 		struct{
 			uint32 /*---------*/ backgroundColor;
 			uint32 /*---------*/ borderColor;
-			bool /*-----------*/ overrideRedirect;
+			uint32 /*---------*/ overrideRedirect;
 			uint32 /*---------*/ eventMask;
 			xcb_colormap_t /*-*/ colormap;
 		} attribute;
@@ -536,10 +791,15 @@ int main(const int argumentAmount, const char *const *argument){
 		attribute.overrideRedirect /*-*/ = true;
 		attribute.eventMask /*--------*/ = XCB_EVENT_MASK_EXPOSURE;
 		attribute.colormap /*---------*/ = colormap;
-
-
-
 		requestCheck(xcb_create_window_checked(connection, depth, window, (*screen).root, x, y, width, height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP, &attribute.backgroundColor), "could not create window", XCB_NONE);
+		{
+			uint32 gcData[3];
+			requestCheck(xcb_open_font_checked(connection, font, LITERAL_LENGTH("fixed"), "fixed"), "could not open font", XCB_NONE);
+			*(gcData + 0) = foreground;
+			*(gcData + 1) = background;
+			*(gcData + 2) = font;
+			requestCheck(xcb_create_gc_checked(connection, gc, window, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_FONT, gcData), "could not create graphics context", XCB_NONE);
+		}
 
 
 
@@ -550,39 +810,23 @@ int main(const int argumentAmount, const char *const *argument){
 
 
 		{
-			uint32 gcData[3];
-			requestCheck(xcb_open_font_checked(connection, font, LITERAL_LENGTH("fixed"), "fixed"), "could not open font", XCB_NONE);
-			*(gcData + 0) = foreground;
-			*(gcData + 1) = background;
-			*(gcData + 2) = font;
-			requestCheck(xcb_create_gc_checked(connection, gc, window, XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_FONT, gcData), "could not create graphics context", XCB_NONE);
+			const uint32 valueList = XCB_EVENT_MASK_KEY_PRESS;
+			xcb_change_window_attributes(connection, (*screen).root, XCB_CW_EVENT_MASK, &valueList);
+			xcb_grab_key(connection, true, (*screen).root, XCB_MOD_MASK_4, 72, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+			xcb_grab_key(connection, true, (*screen).root, XCB_MOD_MASK_4, 71, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
 		}
+		xcb_randr_select_input(connection, (*screen).root, XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_PROPERTY | XCB_RANDR_NOTIFY_MASK_PROVIDER_CHANGE | XCB_RANDR_NOTIFY_MASK_PROVIDER_PROPERTY | XCB_RANDR_NOTIFY_MASK_RESOURCE_CHANGE | XCB_RANDR_NOTIFY_MASK_LEASE);
+
+
+
+
+
+
+
+
+
 		jmp acquireFontMetrics;
 	}
-
-
-
-
-
-
-
-
-
-	/*!
-		add icccm and ewmh information to all windows
-	*/
-
-
-
-
-
-
-
-
-
-	/*!
-		remove reply pointer - use a global that will be handled by the QUIT_DEC function
-	*/
 	acquireFontMetrics:{
 		xcb_query_font_reply_t *reply = xcb_query_font_reply(connection, xcb_query_font(connection, font), NULL);
 		if(reply){
@@ -595,49 +839,13 @@ int main(const int argumentAmount, const char *const *argument){
 		}
 		jmp expressErrors;
 	}
-
-
-
-
-
-
-
-
-
 	expressErrors:{
 		if(depth == 24){
 			printError("could not use 32-bit depth, using 24-bit depth instead");
 		}
-		jmp setupSignal;
-	}
-
-
-
-
-
-
-
-
-
-	setupSignal:{
-		#define Sigaction /*-*/ struct sigaction
-		Sigaction s;
-		s.sa_handler = quit;
-		s.sa_flags = 0;
-		sigemptyset(&s.sa_mask);
-		sigaction(SIGUSR1, &s, NULL);
-		#undef  Sigaction
+		seconds = 0;
 		jmp eventLoop;
 	}
-
-
-
-
-
-
-
-
-
 	eventLoop:{
 		xcb_flush(connection);
 		free(event);
@@ -645,6 +853,18 @@ int main(const int argumentAmount, const char *const *argument){
 		jmp waitForEventLoop;
 	}
 	waitForEventLoop:{
+		if((event = xcb_poll_for_event(connection))){
+			jmp switchEvents;
+		}
+		if(seconds){
+			if(time(NULL) - seconds >= duration){
+				xcb_unmap_window(connection, window);
+				xcb_flush(connection);
+				seconds = 0;
+				jmp eventLoop;
+			}
+			jmp exposeEvent;
+		}
 		if((event = xcb_wait_for_event(connection))){
 			jmp switchEvents;
 		}
@@ -655,15 +875,13 @@ int main(const int argumentAmount, const char *const *argument){
 		jmp waitForEventLoop;
 	}
 	switchEvents:{
-		#undef  XCB_RANDR_SCREEN_CHANGE_NOTIFY
-		#define XCB_ONE /*------------------------*/ (1)
-		#define XCB_RANDR_SCREEN_CHANGE_NOTIFY /*-*/ (89)
+		#define XCB_ONE /*-*/ (1)
 		printEvent();
 		switch (*event).response_type & ~0x80 over
 			to XCB_NONE: /*-----------------------*/ jmp errorEvent;
 			to XCB_ONE: /*------------------------*/ jmp unexpectedEvent;
-			to XCB_KEY_PRESS: /*------------------*/ jmp unexpectedEvent;
-			to XCB_KEY_RELEASE: /*----------------*/ jmp unexpectedEvent;
+			to XCB_KEY_PRESS: /*------------------*/ jmp keyPressEvent;
+			to XCB_KEY_RELEASE: /*----------------*/ jmp errorEvent;
 			to XCB_BUTTON_PRESS: /*---------------*/ jmp unexpectedEvent;
 			to XCB_BUTTON_RELEASE: /*-------------*/ jmp unexpectedEvent;
 			to XCB_MOTION_NOTIFY: /*--------------*/ jmp unexpectedEvent;
@@ -696,151 +914,84 @@ int main(const int argumentAmount, const char *const *argument){
 			to XCB_CLIENT_MESSAGE: /*-------------*/ jmp unexpectedEvent;
 			to XCB_MAPPING_NOTIFY: /*-------------*/ jmp eventLoop;
 			to XCB_GE_GENERIC: /*-----------------*/ jmp unexpectedEvent;
-			to XCB_RANDR_SCREEN_CHANGE_NOTIFY: /*-*/ jmp unexpectedEvent;
-			off: /*-------------------------------*/ jmp unexpectedEvent;
+			off: /*-------------------------------*/ jmp extensionEvent;
 		end
-		#undef  XCB_RANDR_SCREEN_CHANGE_NOTIFY
 		#undef  XCB_ONE
 	}
-
-
-
-
-
-
-
-
-
 	errorEvent:{
 		genericError = (void *)event;
 		printXCBError();
 		genericError = NULL;
 		jmp eventLoop;
 	}
+	keyPressEvent:{
 
 
 
-
-
-
-
-
-
-/*!
-	maybe: add a counter so that the first expose happens and only the next ones are interrupted
-*/
-	exposeEvent:{
-
-
-
-		#define PCLOSE_FAILURE /*-*/ (-1)
-
-
-
-		FILE *file;
-		char brightnessNameLeft[3];
-		*(brightnessNameLeft + 0) = '-';
-		*(brightnessNameLeft + 1) = '-';
-		*(brightnessNameLeft + 2) = '-';
-		received = false;
-		if((file = popen("cat /sys/class/*/amdgpu_bl0/brightness", "r"))){
-			char c;
-
-
-
-
-
-
-
-
-
-			{
-				int i = 0;
-				loopo:{
-					c = fgetc(file);
-					if(c == '\n'){
-						jmp loopoExit;
-					}
-					brightnessNameLeft[i] = c;
-					++i;
-					jmp loopo;
-				}
-				loopoExit:{}
-			}
-			if(brightnessNameLeft[1] == '-'){
-				brightnessNameLeft[2] = brightnessNameLeft[0];
-				brightnessNameLeft[1] = '0';
-				brightnessNameLeft[0] = '0';
-			}
-
-
-
-			if(brightnessNameLeft[2] == '-'){
-				brightnessNameLeft[2] = brightnessNameLeft[1];
-				brightnessNameLeft[1] = brightnessNameLeft[0];
-				brightnessNameLeft[0] = '0';
-			}
-
-
-
-
-
-
-
-
-
-			if(pclose(file) == PCLOSE_FAILURE){
-				printError("could not close brightness information file");
-			}
-		}else{
-			printError("could not open brightness information file");
+		oldAverageBrightness = averageBrightness;
+		storeMonitors();
+		getMonitorGamma();
+		if((*(xcb_key_press_event_t *)event).detail == 72){
+			setBrightness(+0.05, whichMonitor);
+		}elif((*(xcb_key_press_event_t *)event).detail == 71){
+			setBrightness(-0.05, whichMonitor);
 		}
-
-
-
-		#undef  PCLOSE_FAILURE
-
-
-
-
-
-
-
-
-		xcb_put_image_checked(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, window, gc, base.width, base.height, base.x, base.y, 0, depth, base.size, (void *)base.data);
-		if(received) jmp prepareForAnotherExpose;
-		xcb_image_text_8_checked(connection, LITERAL_LENGTH(name), window, gc, fontX + 10, fontY + 10 + 2 * fontHeight, name);
-		if(received) jmp prepareForAnotherExpose;
-		xcb_image_text_8_checked(connection, 3, window, gc, fontX + 10, fontY + 10 + 3 * fontHeight, brightnessNameLeft);
-		if(received) jmp prepareForAnotherExpose;
-		xcb_image_text_8_checked(connection, LITERAL_LENGTH(name), window, gc, fontX + 10, fontY + 10 + 4 * fontHeight, name);
-		if(received) jmp prepareForAnotherExpose;
-		xcb_image_text_8_checked(connection, 3, window, gc, fontX + 10, fontY + 10 + 5 * fontHeight, brightnessNameLeft);
-		if(received) jmp prepareForAnotherExpose;
+		{
+			uint i;
+			for(i = 0; i < monitorAllocated; inc i){
+				uint ii;
+				for(ii = 0; ii < (*(monitorStart + i)).crtcAllocated; inc ii){
+					free((*((*(monitorStart + i)).crtcStart + ii)).data);
+				}
+				free((*(monitorStart + i)).crtcStart);
+			}
+			free(monitorStart);
+		}
+		xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_STACK_MODE, &stackMode);
+		xcb_map_window(connection, window);
 		xcb_flush(connection);
-		if(received) jmp prepareForAnotherExpose;
-		sleep(duration);
-		if(received) jmp prepareForAnotherExpose;
-
-
-
-
-
-
-
-
-
-		xcb_unmap_window(connection, window);
-		xcb_flush(connection);
+		seconds = time(NULL);
 
 
 
 		jmp eventLoop;
 	}
-	prepareForAnotherExpose:{
-		xcb_flush(connection);
-		received = false;
-		jmp exposeEvent;
+	exposeEvent:{
+		exposeEventInner:{
+			Texture t;
+			xcb_get_image_reply_t *reply;
+			t.width = width;
+			t.height = height;
+			t.size = width * height * 4;
+			t.data = data;
+			reply = xcb_get_image_reply(connection, xcb_get_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, (*screen).root, x, y - height, width, height, -1), NULL);
+			if(reply){
+				doubleBoxBlur(width, height, (void *)xcb_get_image_data(reply), intermediateData, data, BOX_SIZE);
+				filterTexture(wallpaper, t);
+				free(reply);
+			}
+			{
+				Texture texture;
+				if(averageBrightness == oldAverageBrightness){
+					texture = case0;
+				}elif(averageBrightness > oldAverageBrightness){
+					texture = case1;
+				}else{
+					texture = case2;
+				}
+				realApplyTexture1(texture, t);
+			}
+			{
+				const uint largePercentage = (100 - averageBrightness) * barOverlay.height / 100;
+				realApplyTexture1WithXY(0, largePercentage, 0, (t.height - barOverlay.height) / 2 + largePercentage, barOverlay, t);
+			}
+			xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, window, gc, width, height, 0, 0, 0, depth, t.size, (void *)t.data);
+			jmp eventLoop;
+		}
+		jmp exposeEventInner;
+	}
+	extensionEvent:{
+		jmp eventLoop;
 	}
 	unexpectedEvent:{
 		printUnexpectedEvent();
@@ -924,3 +1075,265 @@ PRINTUNEXPECTEDEVENT_DEC{
 	ret;
 }
 #endif
+void doubleBoxBlur(const int width, const int height, uint32 *originalData, uint32 *intermediateData, uint32 *destinationData, const int boxSize){
+	const int divisor = boxSize * boxSize;
+	const int boxDistanceFromZero = boxSize >> 1;
+	const int nBoxDistanceFromZero = -boxDistanceFromZero;
+	const int widthMinusOne = width - 1;
+	const int heightMinusOne = height - 1;
+	const int heightMinusBoxSize = height - boxSize;
+	uint32 *tx = originalData;
+	uint32 *txCopy = tx;
+	uint32 *rx = intermediateData;
+	uint32 r;
+	uint32 g;
+	uint32 b;
+	loop:{
+		uint32 *kernelColumnRCurrent = kernelColumnRStart;
+		uint32 *kernelColumnGCurrent = kernelColumnGStart;
+		uint32 *kernelColumnBCurrent = kernelColumnBStart;
+		uint32 *kernelColumnRCurrentCopy = kernelColumnRStart;
+		uint32 *kernelColumnGCurrentCopy = kernelColumnGStart;
+		uint32 *kernelColumnBCurrentCopy = kernelColumnBStart;
+		uint32 *pixelRCurrent = pixelRStart;
+		uint32 *pixelGCurrent = pixelGStart;
+		uint32 *pixelBCurrent = pixelBStart;
+		uint32 *pixelRCurrentCopy = pixelRStart;
+		uint32 *pixelGCurrentCopy = pixelGStart;
+		uint32 *pixelBCurrentCopy = pixelBStart;
+		int x = 0;
+		int y = 0;
+		{
+			int kx = nBoxDistanceFromZero;
+			r = 0;
+			g = 0;
+			b = 0;
+			while(kx <= boxDistanceFromZero){
+				int ky = nBoxDistanceFromZero;
+				int usedX = x + kx;
+				if(usedX < 0){
+					usedX = 0;
+				}
+				*kernelColumnRCurrent = 0;
+				*kernelColumnGCurrent = 0;
+				*kernelColumnBCurrent = 0;
+				tx += usedX;
+				while(ky <= boxDistanceFromZero){
+					int usedY = y + ky;
+					uint32 color;
+					if(usedY < 0){
+						usedY = 0;
+					}
+					color = *(tx + usedY * width);
+					*pixelRCurrent = (color & 0xFF0000) >> 16;
+					*pixelGCurrent = (color & 0x00FF00) >>  8;
+					*pixelBCurrent =  color & 0x0000FF;
+					*kernelColumnRCurrent += *pixelRCurrent;
+					*kernelColumnGCurrent += *pixelGCurrent;
+					*kernelColumnBCurrent += *pixelBCurrent;
+					inc pixelRCurrent;
+					inc pixelGCurrent;
+					inc pixelBCurrent;
+					inc ky;
+				}
+				tx -= usedX;
+				r += *kernelColumnRCurrent;
+				g += *kernelColumnGCurrent;
+				b += *kernelColumnBCurrent;
+				pixelRCurrent += heightMinusBoxSize;
+				pixelGCurrent += heightMinusBoxSize;
+				pixelBCurrent += heightMinusBoxSize;
+				inc kernelColumnRCurrent;
+				inc kernelColumnGCurrent;
+				inc kernelColumnBCurrent;
+				inc kx;
+			}
+			*rx = 0xFF000000 + ((r / divisor) << 16) + ((g / divisor) << 8) + b / divisor;
+			inc rx;
+		}
+		inc x;
+		xFirstLoop:{
+			int kx = boxDistanceFromZero;
+			int ky = nBoxDistanceFromZero;
+			int usedX = x + kx;
+			if(usedX < 0){
+				usedX = 0;
+			}elif(usedX >= width){
+				usedX = widthMinusOne;
+			}
+			r -= *kernelColumnRCurrentCopy;
+			g -= *kernelColumnGCurrentCopy;
+			b -= *kernelColumnBCurrentCopy;
+			kernelColumnRCurrent = kernelColumnRCurrentCopy + boxSize;
+			kernelColumnGCurrent = kernelColumnGCurrentCopy + boxSize;
+			kernelColumnBCurrent = kernelColumnBCurrentCopy + boxSize;
+			inc kernelColumnRCurrentCopy;
+			inc kernelColumnGCurrentCopy;
+			inc kernelColumnBCurrentCopy;
+			{
+				uint32 lr = 0;
+				uint32 lg = 0;
+				uint32 lb = 0;
+				tx += usedX;
+				while(ky <= boxDistanceFromZero){
+					int usedY = y + ky;
+					uint32 color;
+					if(usedY < 0){
+						usedY = 0;
+					}elif(usedY >= height){
+						usedY = heightMinusOne;
+					}
+					color = *(tx + usedY * width);
+					*pixelRCurrent = (color & 0xFF0000) >> 16;
+					*pixelGCurrent = (color & 0x00FF00) >>  8;
+					*pixelBCurrent =  color & 0x0000FF;
+					lr += *pixelRCurrent;
+					lg += *pixelGCurrent;
+					lb += *pixelBCurrent;
+					inc pixelRCurrent;
+					inc pixelGCurrent;
+					inc pixelBCurrent;
+					inc ky;
+				}
+				tx -= usedX;
+				r += lr;
+				g += lg;
+				b += lb;
+				*kernelColumnRCurrent = lr;
+				*kernelColumnGCurrent = lg;
+				*kernelColumnBCurrent = lb;
+				pixelRCurrent += heightMinusBoxSize;
+				pixelGCurrent += heightMinusBoxSize;
+				pixelBCurrent += heightMinusBoxSize;
+			}
+			*rx = 0xFF000000 + ((r / divisor) << 16) + ((g / divisor) << 8) + b / divisor;
+			inc rx;
+			if(inc x < width){
+				jmp xFirstLoop;
+			}
+		}
+		inc y;
+		yLoop:{
+			uint32 *pr;
+			uint32 *pg;
+			uint32 *pb;
+			int ky = boxDistanceFromZero;
+			int usedY = y + ky;
+			if(usedY < 0){
+				usedY = 0;
+			}elif(usedY >= height){
+				usedY = heightMinusOne;
+			}
+			x = 0;
+			{
+				int kx = nBoxDistanceFromZero;
+				kernelColumnRCurrent = kernelColumnRStart;
+				kernelColumnGCurrent = kernelColumnGStart;
+				kernelColumnBCurrent = kernelColumnBStart;
+				kernelColumnRCurrentCopy = kernelColumnRStart;
+				kernelColumnGCurrentCopy = kernelColumnGStart;
+				kernelColumnBCurrentCopy = kernelColumnBStart;
+				pixelRCurrent = pixelRCurrentCopy;
+				pixelGCurrent = pixelGCurrentCopy;
+				pixelBCurrent = pixelBCurrentCopy;
+				pr = pixelRCurrent + boxSize;
+				pg = pixelGCurrent + boxSize;
+				pb = pixelBCurrent + boxSize;
+				r = 0;
+				g = 0;
+				b = 0;
+				tx += usedY * width;
+				while(kx <= boxDistanceFromZero){
+					int usedX = x + kx;
+					uint32 color;
+					if(usedX < 0){
+						usedX = 0;
+					}elif(usedX >= width){
+						usedX = widthMinusOne;
+					}
+					color = *(tx + usedX);
+					*pr = (color & 0xFF0000) >> 16;
+					*pg = (color & 0x00FF00) >>  8;
+					*pb =  color & 0x0000FF;
+					*kernelColumnRCurrent += *pr - *pixelRCurrent;
+					*kernelColumnGCurrent += *pg - *pixelGCurrent;
+					*kernelColumnBCurrent += *pb - *pixelBCurrent;
+					r += *kernelColumnRCurrent;
+					g += *kernelColumnGCurrent;
+					b += *kernelColumnBCurrent;
+					pixelRCurrent += height;
+					pixelGCurrent += height;
+					pixelBCurrent += height;
+					pr += height;
+					pg += height;
+					pb += height;
+					inc kernelColumnRCurrent;
+					inc kernelColumnGCurrent;
+					inc kernelColumnBCurrent;
+					inc kx;
+				}
+				tx -= usedY * width;
+				*rx = 0xFF000000 + ((r / divisor) << 16) + ((g / divisor) << 8) + b / divisor;
+				inc rx;
+				inc x;
+			}
+			{
+				int usedX = x + boxDistanceFromZero;
+				usedY *= width;
+				tx += usedY;
+				xLoop:{
+					uint32 color;
+					if(usedX >= width){
+						usedX = widthMinusOne;
+					}
+					kernelColumnRCurrent = kernelColumnRCurrentCopy + boxSize;
+					kernelColumnGCurrent = kernelColumnGCurrentCopy + boxSize;
+					kernelColumnBCurrent = kernelColumnBCurrentCopy + boxSize;
+					r -= *kernelColumnRCurrentCopy;
+					g -= *kernelColumnGCurrentCopy;
+					b -= *kernelColumnBCurrentCopy;
+					color = *(tx + usedX);
+					*pr = (color & 0xFF0000) >> 16;
+					*pg = (color & 0x00FF00) >>  8;
+					*pb =  color & 0x0000FF;
+					*kernelColumnRCurrent += *pr - *pixelRCurrent;
+					*kernelColumnGCurrent += *pg - *pixelGCurrent;
+					*kernelColumnBCurrent += *pb - *pixelBCurrent;
+					r += *kernelColumnRCurrent;
+					g += *kernelColumnGCurrent;
+					b += *kernelColumnBCurrent;
+					inc kernelColumnRCurrentCopy;
+					inc kernelColumnGCurrentCopy;
+					inc kernelColumnBCurrentCopy;
+					pixelRCurrent += height;
+					pixelGCurrent += height;
+					pixelBCurrent += height;
+					pr += height;
+					pg += height;
+					pb += height;
+					*rx = 0xFF000000 + ((r / divisor) << 16) + ((g / divisor) << 8) + b / divisor;
+					inc rx;
+					if(inc x < width){
+						inc usedX;
+						jmp xLoop;
+					}
+				}
+				tx -= usedY;
+			}
+			if(inc y < height){
+				inc pixelRCurrentCopy;
+				inc pixelGCurrentCopy;
+				inc pixelBCurrentCopy;
+				jmp yLoop;
+			}
+		}
+		if(txCopy == originalData){
+			tx = intermediateData;
+			txCopy = tx;
+			rx = destinationData;
+			jmp loop;
+		}
+	}
+	ret;
+}
+

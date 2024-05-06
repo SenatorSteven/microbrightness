@@ -56,8 +56,13 @@ SOFTWARE. */
 		to XCB_NAME: /*-----------*/ type = "name"; /*-------------*/ brk;
 		to XCB_LENGTH: /*---------*/ type = "length"; /*-----------*/ brk;
 		to XCB_IMPLEMENTATION: /*-*/ type = "implementation"; /*---*/ brk;
-		off: /*-------------------*/ type = "unrecognized"; /*-----*/ brk;
+		off: /*-------------------*/ jmp findIt;
 	end
+	jmp findItBack;
+	findIt:{
+		type = NULL;
+	}
+	findItBack:{}
 	switch (*_PRINTXCBERROR_ERROR).major_code over
 		to XCB_CREATE_WINDOW: /*--------------*/ operation = "create window"; /*--------------*/ brk;
 		to XCB_CHANGE_WINDOW_ATTRIBUTES: /*---*/ operation = "change window attributes"; /*---*/ brk;
