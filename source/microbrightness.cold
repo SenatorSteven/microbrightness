@@ -1,14 +1,6 @@
 
 /*!
-	readConfig() when `set horizontal-alignment center;` drops and `center` is not recognized
-*/
-
-/*!
 	how can the user know which monitor is which, should he want to pick a static one? maybe there should be no such setting.
-*/
-
-/*!
-	give the option to not display the window should the brightness not change
 */
 
 /*!
@@ -20,21 +12,43 @@
 */
 
 /*!
-	remember to destroy the mutexes and conditions
-		if(pthread_mutex_destroy(&sleepLock) != PTHREAD_MUTEX_DESTROY_SUCCESS){
-			printTitledError("pthread error", "could not destroy sleep mutex");
-			ret NULL;
-		}
-		if(pthread_cond_destroy(&sleepCondition) != PTHREAD_COND_DESTROY_SUCCESS){
-			printTitledError("pthread error", "could not destroy sleep cond");
-			ret NULL;
-		}
+	add mutex and cond guards to destroy them only when created.
+
+	errors about this have already come about, specifically about the sleep thread.
 */
 
 /*!
-	handle brightness changes.
+	if the program is showing the window, it cannot free `image data pointer` and `copyImage() image data pointer`.
 
-	we could setup a messaging mechanism to draw the window since there is no way to receive events. use a display-window instruction.
+	the program can also block terminal from continuing.
+*/
+
+/*!
+	make sure that the user can't mess with the program when that is updating the monitor setup (the threads and their mutexes is the issue)
+*/
+
+/*!
+	should probably allocate the size of the window as an image to draw on.
+*/
+
+/*!
+	visual artifacting has been observed.
+*/
+
+/*!
+	institute instruction to execute program commands instead of system commands. or maybe make those commands instructions unto themselves
+*/
+
+/*!
+	the icon could not only be set but updated whenever the user updates the brightness
+*/
+
+/*!
+	how to control how the final overlay is done? maybe ask microsound?
+*/
+
+/*!
+	what if it's just transparent and has no blur (blurSize == 1)? maybe don't even get the image from the root, just draw the window without it.
 */
 
 /*!
@@ -113,150 +127,197 @@ SOFTWARE. */
 /*!}*/
 
 /*!defines:{*/
-	#define DEBUG /*--------------------------*/ (true)
+	#define DEBUG /*-------------------------------------*/ (true)
 
-	#define PROGRAM_NAME /*-------------------*/ "microbrightness"
+	#define PROGRAM_NAME /*------------------------------*/ "microbrightness"
 
-	#define PTHREAD_CREATE_SUCCESS /*---------*/ (0)
-	#define PTHREAD_SETCANCELSTATE_SUCCESS /*-*/ (0)
-	#define PTHREAD_SETCANCELTYPE_SUCCESS /*--*/ (0)
-	#define PTHREAD_MUTEX_INIT_SUCCESS /*-----*/ (0)
-	#define PTHREAD_MUTEX_LOCK_SUCCESS /*-----*/ (0)
-	#define PTHREAD_MUTEX_TRYLOCK_SUCCESS /*--*/ (0)
-	#define PTHREAD_MUTEX_UNLOCK_SUCCESS /*---*/ (0)
-	#define PTHREAD_MUTEX_DESTROY_SUCCESS /*--*/ (0)
-	#define PTHREAD_COND_INIT_SUCCESS /*------*/ (0)
-	#define PTHREAD_COND_WAIT_SUCCESS /*------*/ (0)
-	#define PTHREAD_COND_TIMEDWAIT_SUCCESS /*-*/ (0)
-	#define PTHREAD_COND_SIGNAL_SUCCESS /*----*/ (0)
-	#define PTHREAD_COND_DESTROY_SUCCESS /*---*/ (0)
-	#define PTHREAD_CANCEL_SUCCESS /*---------*/ (0)
-	#define PTHREAD_JOIN_SUCCESS /*-----------*/ (0)
+	#define PTHREAD_CREATE_SUCCESS /*--------------------*/ (0)
+	#define PTHREAD_SETCANCELSTATE_SUCCESS /*------------*/ (0)
+	#define PTHREAD_SETCANCELTYPE_SUCCESS /*-------------*/ (0)
+	#define PTHREAD_MUTEX_INIT_SUCCESS /*----------------*/ (0)
+	#define PTHREAD_MUTEX_LOCK_SUCCESS /*----------------*/ (0)
+	#define PTHREAD_MUTEX_TRYLOCK_SUCCESS /*-------------*/ (0)
+	#define PTHREAD_MUTEX_UNLOCK_SUCCESS /*--------------*/ (0)
+	#define PTHREAD_MUTEX_DESTROY_SUCCESS /*-------------*/ (0)
+	#define PTHREAD_COND_INIT_SUCCESS /*-----------------*/ (0)
+	#define PTHREAD_COND_WAIT_SUCCESS /*-----------------*/ (0)
+	#define PTHREAD_COND_TIMEDWAIT_SUCCESS /*------------*/ (0)
+	#define PTHREAD_COND_SIGNAL_SUCCESS /*---------------*/ (0)
+	#define PTHREAD_COND_DESTROY_SUCCESS /*--------------*/ (0)
+	#define PTHREAD_CANCEL_SUCCESS /*--------------------*/ (0)
+	#define PTHREAD_JOIN_SUCCESS /*----------------------*/ (0)
 
-	#define _STRING_NODE_CHILDREN_AMOUNT /*---*/ (14)
-	#define STRING_NODE_CHILDREN_AMOUNT /*----*/ (_STRING_NODE_CHILDREN_AMOUNT > 28? 28 : _STRING_NODE_CHILDREN_AMOUNT)
-	#define SHORTCUT_CODE_AMOUNT /*-----------*/ (256)
+	#define _STRING_NODE_CHILDREN_AMOUNT /*--------------*/ (14)
+	#define STRING_NODE_CHILDREN_AMOUNT /*---------------*/ (_STRING_NODE_CHILDREN_AMOUNT > 28? 28 : _STRING_NODE_CHILDREN_AMOUNT)
+	#define SHORTCUT_CODE_AMOUNT /*----------------------*/ (256)
 
-	#define DEFAULT_OUTPUT_STREAM /*----------*/ (stdout)
-	#define DEFAULT_ERROR_STREAM /*-----------*/ (stderr)
+	#define DEFAULT_OUTPUT_STREAM /*---------------------*/ (stdout)
+	#define DEFAULT_ERROR_STREAM /*----------------------*/ (stderr)
 
-	#define MESSAGE_START /*------------------*/ ("\x1b[1m")
-	#define MESSAGE_FATAL /*------------------*/ ("\x1b[91m")
-	#define MESSAGE_ERROR /*------------------*/ ("\x1b[33m")
-	#define MESSAGE_EVENT /*------------------*/ ("\x1b[32m")
-	#define MESSAGE_END /*--------------------*/ ("\x1b[m")
+	#define MESSAGE_START /*-----------------------------*/ ("\x1b[1m")
+	#define MESSAGE_FATAL /*-----------------------------*/ ("\x1b[91m")
+	#define MESSAGE_ERROR /*-----------------------------*/ ("\x1b[33m")
+	#define MESSAGE_EVENT /*-----------------------------*/ ("\x1b[32m")
+	#define MESSAGE_END /*-------------------------------*/ ("\x1b[m")
 
-	#define NUMBER_REGEX /*-------------------*/ (" (([0][\\s]*[x][\\s]*([a-fA-F0-9][\\s]*)*|([0-9][\\s]*)+|[+*/][\\s]*)+)")
+	#define NUMBER_REGEX /*------------------------------*/ (" (([0][\\s]*[x][\\s]*([a-fA-F0-9][\\s]*)*|([0-9][\\s]*)+|[+*/][\\s]*)+)")
 
-	#define UNRECOGNIZED_ARGUMENT /*----------*/ (0)
-	#define HELP_ARGUMENT /*------------------*/ (1)
-	#define STDOUT_ARGUMENT /*----------------*/ (2)
-	#define STDERR_ARGUMENT /*----------------*/ (3)
-	#define CONFIG_ARGUMENT /*----------------*/ (4)
-	#define ERROR_ARGUMENT /*-----------------*/ (5)
-	#define SERVER_ARGUMENT /*----------------*/ (6)
+	#define UNRECOGNIZED_ARGUMENT /*---------------------*/ (0)
+	#define HELP_ARGUMENT /*-----------------------------*/ (1)
+	#define STDOUT_ARGUMENT /*---------------------------*/ (2)
+	#define STDERR_ARGUMENT /*---------------------------*/ (3)
+	#define CONFIG_ARGUMENT /*---------------------------*/ (4)
+	#define ERROR_ARGUMENT /*----------------------------*/ (5)
+	#define SERVER_ARGUMENT /*---------------------------*/ (6)
 
-	#define NONE_INSTRUCTION /*---------------*/ (b(0000000))
-	#define NAME_INSTRUCTION /*---------------*/ (b(0000001))
-	#define NAME_LIST_INSTRUCTION /*----------*/ (b(0000010))
-	#define NUMBER_INSTRUCTION /*-------------*/ (b(0000100))
-	#define STRING_INSTRUCTION /*-------------*/ (b(0001000))
-	#define EXECUTE_INSTRUCTION /*------------*/ (b(0010000))
-	#define IMAGE_INSTRUCTION /*--------------*/ (b(0100000))
-	#define END_INSTRUCTION /*----------------*/ (b(1000000))
+	#define NONE_INSTRUCTION /*--------------------------*/ (b(0000000))
+	#define NAME_INSTRUCTION /*--------------------------*/ (b(0000001))
+	#define NAME_LIST_INSTRUCTION /*---------------------*/ (b(0000010))
+	#define NUMBER_INSTRUCTION /*------------------------*/ (b(0000100))
+	#define STRING_INSTRUCTION /*------------------------*/ (b(0001000))
+	#define EXECUTE_INSTRUCTION /*-----------------------*/ (b(0010000))
+	#define IMAGE_INSTRUCTION /*-------------------------*/ (b(0100000))
+	#define END_INSTRUCTION /*---------------------------*/ (b(1000000))
 
-	#define SUCCESS_NAME_LIST /*--------------*/ (0)
-	#define INVALID_NAME_NAME_LIST /*---------*/ (1)
-	#define PREMATURE_END_NAME_LIST /*--------*/ (2)
+	#define SUCCESS_NAME_LIST /*-------------------------*/ (0)
+	#define INVALID_NAME_NAME_LIST /*--------------------*/ (1)
+	#define PREMATURE_END_NAME_LIST /*-------------------*/ (2)
 
-	#define VALID_NUMBER /*-------------------*/ (0)
-	#define NON_NUMBER /*---------------------*/ (1)
-	#define OVERFLOWN_NUMBER /*---------------*/ (2)
-	#define DIVIDED_BY_ZERO_NUMBER /*---------*/ (3)
+	#define VALID_NUMBER /*------------------------------*/ (0)
+	#define NON_NUMBER /*--------------------------------*/ (1)
+	#define OVERFLOWN_NUMBER /*--------------------------*/ (2)
+	#define DIVIDED_BY_ZERO_NUMBER /*--------------------*/ (3)
 
-	#define CANNOT_OPEN_READ_CONFIG /*--------*/ (0)
-	#define CANNOT_READ_READ_CONFIG /*--------*/ (1)
-	#define UNSUPPORTED_FORMAT_READ_CONFIG /*-*/ (2)
-	#define BAD_HEADER_READ_CONFIG /*---------*/ (3)
-	#define BAD_DEPTH_READ_CONFIG /*----------*/ (4)
-	#define BAD_COMPRESSION_READ_CONFIG /*----*/ (5)
-	#define UNSUPPORTED_HEIGHT_READ_CONFIG /*-*/ (6)
-	#define BAD_SIZE_READ_CONFIG /*-----------*/ (7)
-	#define FAILED_READ_CONFIG /*-------------*/ (8)
-	#define BAD_PIXELS_READ_CONFIG /*---------*/ (9)
-	#define BAD_IMAGE_READ_CONFIG /*----------*/ (10)
-	#define SUCCESS_READ_CONFIG /*------------*/ (11)
+	#define CANNOT_OPEN_READ_CONFIG /*-------------------*/ (0)
+	#define CANNOT_READ_READ_CONFIG /*-------------------*/ (1)
+	#define UNSUPPORTED_FORMAT_READ_CONFIG /*------------*/ (2)
+	#define BAD_HEADER_READ_CONFIG /*--------------------*/ (3)
+	#define BAD_DEPTH_READ_CONFIG /*---------------------*/ (4)
+	#define BAD_COMPRESSION_READ_CONFIG /*---------------*/ (5)
+	#define UNSUPPORTED_HEIGHT_READ_CONFIG /*------------*/ (6)
+	#define BAD_SIZE_READ_CONFIG /*----------------------*/ (7)
+	#define FAILED_READ_CONFIG /*------------------------*/ (8)
+	#define BAD_PIXELS_READ_CONFIG /*--------------------*/ (9)
+	#define BAD_IMAGE_READ_CONFIG /*---------------------*/ (10)
+	#define SUCCESS_READ_CONFIG /*-----------------------*/ (11)
 
-	#define NONE_COMMAND /*-------------------*/ (0)
-	#define EXECUTE_COMMAND /*----------------*/ (1)
-	#define BRIGHTNESS_UP_COMMAND /*----------*/ (2)
-	#define BRIGHTNESS_DOWN_COMMAND /*--------*/ (3)
-	#define SHOW_WINDOW_COMMAND /*------------*/ (4)
-	#define RESTART_COMMAND /*----------------*/ (5)
-	#define EXIT_COMMAND /*-------------------*/ (6)
+	#define NONE_VARIABLE /*-----------------------------*/ (0)
+	#define X_VARIABLE /*--------------------------------*/ (1)
+	#define Y_VARIABLE /*--------------------------------*/ (2)
+	#define X_OFFSET_VARIABLE /*-------------------------*/ (3)
+	#define Y_OFFSET_VARIABLE /*-------------------------*/ (4)
+	#define HORIZONTAL_ALIGNMENT_VARIABLE /*-------------*/ (5)
+	#define VERTICAL_ALIGNMENT_VARIABLE /*---------------*/ (6)
+	#define WIDTH_VARIABLE /*----------------------------*/ (7)
+	#define HEIGHT_VARIABLE /*---------------------------*/ (8)
+	#define WHICH_MONITOR_UPDATES_VARIABLE /*------------*/ (9)
+	#define WHICH_MONITOR_SHOWS_VARIABLE /*--------------*/ (10)
+	#define FOREGROUND_COLOR_VARIABLE /*-----------------*/ (11)
+	#define BACKGROUND_COLOR_VARIABLE /*-----------------*/ (12)
+	#define UNCHANGED_BRIGHTNESS_IMAGE_VARIABLE /*-------*/ (13)
+	#define INCREASED_BRIGHTNESS_IMAGE_VARIABLE /*-------*/ (14)
+	#define DECREASED_BRIGHTNESS_IMAGE_VARIABLE /*-------*/ (15)
+	#define COMMON_OVERLAY_IMAGE_VARIABLE /*-------------*/ (16)
+	#define COMMON_UNDERLAY_IMAGE_VARIABLE /*------------*/ (17)
+	#define BLUR_SIZE_VARIABLE /*------------------------*/ (18)
+	#define DURATION_VARIABLE /*-------------------------*/ (19)
 
-	#define QUIT() /*-------------------------*/ local void             quit(int signal)
-	#define GETSHAREDCHARACTER() /*-----------*/ local int              getSharedCharacter(FILE *const configFile)
-	#define INITMEMORYMANAGER() /*------------*/ local bool             initMemoryManager(void)
-	#define PUSHPOINTER() /*------------------*/ local uint32          _pushPointer(void *const pointer, const char *const label, int (*const freeFunction)(void *))
-	#define POPPOINTER() /*-------------------*/ local void             popPointer(const uint token)
-	#define UPDATEPOINTER() /*----------------*/ local void             updatePointer(const uint token, void *const pointer)
-	#define DELETEMEMORYMANAGER() /*----------*/ local void             deleteMemoryManager(void)
-	#define IFREE() /*------------------------*/ local int              iFree(void *const pointer)
-	#define ISHMCTL() /*----------------------*/ local int              ishmctl(void *const pointer)
-	#define IXCBDISCONNECT() /*---------------*/ local int              iXCBDisconnect(void *const pointer)
-	#define SHMCONNECT() /*-------------------*/ local void             shmConnect(void)
-	#define SHMDISCONNECT() /*----------------*/ local void             shmDisconnect(void)
-	#define IDENTIFYARGUMENT() /*-------------*/ local uint8            identifyArgument(const char *p)
-	#define INSENSITIVESTRINGCOMPARE() /*-----*/ local bool             insensitiveStringCompare(const char *s0, const char *s1)
-	#define SENSITIVESTRINGCOMPARE() /*-------*/ local bool             sensitiveStringCompare(const char *s0, const char *s1)
-	#define SETSTRINGROOT() /*----------------*/ local void             setStringRoot(StringNodeRoot *root)
-	#define BULKINSERTSTRING() /*-------------*/ local void             bulkInsertString(StringNodeRoot *root, const char *const *current)
-	#define INSERTSTRING() /*-----------------*/ local bool             insertString(StringNodeRoot *root, const char *string)
-	#define GETSTRINGNODE() /*----------------*/ local StringNode *     getStringNode(StringNodeRoot *const root, const char **const stringReturn)
-	#define DELETESTRINGROOT() /*-------------*/ local void             deleteStringRoot(StringNodeRoot *root)
-	#define SETSHORTCUTROOT() /*--------------*/ local void             setShortcutRoot(ShortcutNodeRoot *root)
-	#define INSERTSHORTCUT() /*---------------*/ local bool             insertShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier, const uint8 command, char *const string, const uint stringToken, const uint8 field0, const uint8 field1, const uint8 field2, const uint8 field3, const uint8 field4)
-	#define REMOVESHORTCUT() /*---------------*/ local bool             removeShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier)
-	#define RESETSHORTCUTROOT() /*------------*/ local void             resetShortcutRoot(ShortcutNodeRoot *root)
-	#define DELETESHORTCUTROOT() /*-----------*/ local void             deleteShortcutRoot(ShortcutNodeRoot *root)
-	#define UNGRABSHORTCUTS() /*--------------*/ local void             ungrabShortcuts(void)
-	#define READCONFIG() /*-------------------*/ local void             readConfig(const bool createConfigFile, const char *const configPath, int (*getConfigChar)(FILE *file))
-	#define MATCHNAMELIST() /*----------------*/ local uint8            matchNameList(StringNodeRoot *const root, const char *const statementWall, char **statementCurrentReturn, uint8 *const valueReturn)
-	#define MATCHINTEGER() /*-----------------*/ local uint8            matchInteger(char **statementCurrent, const char *const statementWall, int64 *const returnValue)
-	#define MATCHSTRING() /*------------------*/ local bool             matchString(char **statementCurrent, char **stringReturn, uint *stringToken)
-	#define MATCHEXECUTE() /*-----------------*/ local bool             matchExecute(char **statementCurrent, char **executeReturn, uint *executeToken)
-	#define READIMAGE() /*--------------------*/ local uint8            readImage(const char *const path, const char **errorMessage, Image *image)
-	#define EXEC() /*-------------------------*/ local void             exec(const char *const string)
-	#define GETTIMESTAMP() /*-----------------*/ local xcb_timestamp_t  getTimestamp(void)
-	#define GETPOINTERMONITOR() /*------------*/ local Monitor *        getPointerMonitor(void)
-	#define COMPOSITEIMAGES() /*--------------*/ local void             compositeImages(void (*operation)(const uint32 *const, uint32 *const), const int sourceX, const int sourceY, Image *const source, const int destinationX, const int destinationY, Image *const destination)
-	#define COMPOSITEIMAGESOVER() /*----------*/ local void             compositeImagesOver(const uint32 *const source, uint32 *const destination)
-	#define COMPOSITEIMAGESAND() /*-----------*/ local void             compositeImagesAnd(const uint32 *const source, uint32 *const destination)
-	#define TWOPASSBOXBLUR() /*---------------*/ local void             twoPassBoxBlur(const int width, const int height, uint32 *originalData, uint32 *intermediateData, uint32 *destinationData, const int boxSize)
-	#define CANCELTHREADS() /*----------------*/ local void             cancelThreads(void)
-	#define CLEANUP() /*----------------------*/ local void             cleanup(void)
-	#define PRINTUNACCOUNTEDFORPOINTERS() /*--*/ local void             printUnaccountedForPointers(const Pointer *current, const Pointer *wall)
-	#define PRINTERROR() /*-------------------*/ local void             printError(const char *const message, ...)
-	#define PRINTTITLEDERROR() /*-------------*/ local void             printTitledError(const char *const title, const char *const message)
-	#define PRINTTITLEDQUOTEDERROR() /*-------*/ local void             printTitledQuotedError(const char *const title, const char *const argument, const char *const message)
-	#define PRINTCONNECTIONERROR() /*---------*/ local void             printConnectionError(void)
-	#define PRINTTITLEDNAMEDERROR() /*--------*/ local void             printTitledNamedError(const char *const title, const char *const message, const char *const name)
-	#define PRINTERROREVENT() /*--------------*/ local void             printErrorEvent(const void *const event)
-	#define PRINTTITLEDVALUEDERROR() /*-------*/ local void             printTitledValuedError(const char *const title, const char *const message, const uint value)
-	#define PRINTCONFIGERROR() /*-------------*/ local void             printConfigError(const char *const type, const char *const message, const char finalStatementCharacter, const bool printLine, const bool printConfig, const bool printPointer, const bool printPattern, const char *const configPath, const uint statementLine, const char *const statementStart, const char *const statementWall, const Instruction *instructionStart, const Instruction *instructionCurrent, const char *const *currentScopeInstructionList, const StringNodeRoot *const currentScopeInstructionRoot, StringNodeRoot *const *const *currentScopeInstructionData)
-	#define OPENERRORSTREAM() /*--------------*/ local bool             openErrorStream(void)
-	#define CLOSEERRORSTREAM() /*-------------*/ local void             closeErrorStream(void)
+	#define NONE_HORIZONTAL_ALIGNMENT /*-----------------*/ (0)
+	#define LEFT_HORIZONTAL_ALIGNMENT /*-----------------*/ (1)
+	#define CENTER_HORIZONTAL_ALIGNMENT /*---------------*/ (2)
+	#define RIGHT_HORIZONTAL_ALIGNMENT /*----------------*/ (3)
 
-	#define xcb_wait_for_reply(a, b, c) /*----*/ (xcb_wait_for_reply(a, (b).sequence, c))
-	#define xcb_discard_reply(a, b) /*--------*/ (xcb_discard_reply(a, (b).sequence))
-	#define xcb_send_event(a, b, c, d, e) /*--*/ (xcb_send_event(a, b, c, d, (void *)(e)))
+	#define NONE_VERTICAL_ALIGNMENT /*-------------------*/ (0)
+	#define TOP_VERTICAL_ALIGNMENT /*--------------------*/ (1)
+	#define CENTER_VERTICAL_ALIGNMENT /*-----------------*/ (2)
+	#define BOTTOM_VERTICAL_ALIGNMENT /*-----------------*/ (3)
 
-	#define SELF(self) /*---------------------*/ self
-	#define STRING_ARRAY_SIZE(a) /*-----------*/ (countof(a) - 1)
+	#define NONE_WHICH_MONITOR /*------------------------*/ (0)
+	#define POINTER_WHICH_MONITOR /*---------------------*/ (1)
+	#define ALL_WHICH_MONITOR /*-------------------------*/ (2)
 
-	#define pushPointer(a, b, c) /*-----------*/ (_pushPointer(a, b, (int (*const)(void *))(c)))
-	#define findString(a, b) /*---------------*/ (!getStringNode(a, (const char **const)(b)))
+	#define NONE_COMPOSITE_IMAGES_OPERATION /*-----------*/ (0)
+	#define OVER_COMPOSITE_IMAGES_OPERATION /*-----------*/ (1)
+	#define AND_COMPOSITE_IMAGES_OPERATION /*------------*/ (2)
+
+	#define NONE_IMAGE_VARIABLE /*-----------------------*/ (0)
+	#define UNCHANGED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE /*-*/ (1)
+	#define INCREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE /*-*/ (2)
+	#define DECREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE /*-*/ (3)
+	#define COMMON_OVERLAY_IMAGE_IMAGE_VARIABLE /*-------*/ (4)
+	#define COMMON_UNDERLAY_IMAGE_IMAGE_VARIABLE /*------*/ (5)
+
+	#define NONE_COMMAND /*------------------------------*/ (0)
+	#define EXECUTE_COMMAND /*---------------------------*/ (1)
+	#define BRIGHTNESS_UP_COMMAND /*---------------------*/ (2)
+	#define BRIGHTNESS_DOWN_COMMAND /*-------------------*/ (3)
+	#define SHOW_WINDOW_COMMAND /*-----------------------*/ (4)
+	#define RESTART_COMMAND /*---------------------------*/ (5)
+	#define EXIT_COMMAND /*------------------------------*/ (6)
+
+	#define QUIT() /*------------------------------------*/ local void             quit(int signal)
+	#define GETSHAREDCHARACTER() /*----------------------*/ local int              getSharedCharacter(FILE *const configFile)
+	#define INITMEMORYMANAGER() /*-----------------------*/ local bool             initMemoryManager(void)
+	#define PUSHPOINTER() /*-----------------------------*/ local uint32          _pushPointer(void *const pointer, const char *const label, int (*const freeFunction)(void *))
+	#define POPPOINTER() /*------------------------------*/ local void             popPointer(const uint token)
+	#define UPDATEPOINTER() /*---------------------------*/ local void             updatePointer(const uint token, void *const pointer)
+	#define DELETEMEMORYMANAGER() /*---------------------*/ local void             deleteMemoryManager(void)
+	#define IFREE() /*-----------------------------------*/ local int              iFree(void *const pointer)
+	#define ISHMCTL() /*---------------------------------*/ local int              ishmctl(void *const pointer)
+	#define IXCBDISCONNECT() /*--------------------------*/ local int              iXCBDisconnect(void *const pointer)
+	#define SHMCONNECT() /*------------------------------*/ local void             shmConnect(void)
+	#define SHMDISCONNECT() /*---------------------------*/ local void             shmDisconnect(void)
+	#define IDENTIFYARGUMENT() /*------------------------*/ local uint8            identifyArgument(const char *p)
+	#define INSENSITIVESTRINGCOMPARE() /*----------------*/ local bool             insensitiveStringCompare(const char *s0, const char *s1)
+	#define SENSITIVESTRINGCOMPARE() /*------------------*/ local bool             sensitiveStringCompare(const char *s0, const char *s1)
+	#define SETSTRINGROOT() /*---------------------------*/ local void             setStringRoot(StringNodeRoot *root)
+	#define BULKINSERTSTRING() /*------------------------*/ local void             bulkInsertString(StringNodeRoot *root, const char *const *current)
+	#define INSERTSTRING() /*----------------------------*/ local bool             insertString(StringNodeRoot *root, const char *string)
+	#define GETSTRINGNODE() /*---------------------------*/ local StringNode *     getStringNode(StringNodeRoot *const root, const char **const stringReturn)
+	#define DELETESTRINGROOT() /*------------------------*/ local void             deleteStringRoot(StringNodeRoot *root)
+	#define SETSHORTCUTROOT() /*-------------------------*/ local void             setShortcutRoot(ShortcutNodeRoot *root)
+	#define INSERTSHORTCUT() /*--------------------------*/ local bool             insertShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier, const uint8 command, char *const string, const uint stringToken, const uint8 field0, const uint8 field1, const uint8 field2, const uint8 field3, const uint8 field4)
+	#define REMOVESHORTCUT() /*--------------------------*/ local bool             removeShortcut(ShortcutNodeRoot *root, const uint8 code, const uint16 modifier)
+	#define RESETSHORTCUTROOT() /*-----------------------*/ local void             resetShortcutRoot(ShortcutNodeRoot *root)
+	#define DELETESHORTCUTROOT() /*----------------------*/ local void             deleteShortcutRoot(ShortcutNodeRoot *root)
+	#define UNGRABSHORTCUTS() /*-------------------------*/ local void             ungrabShortcuts(void)
+	#define READCONFIG() /*------------------------------*/ local void             readConfig(const bool createConfigFile, const char *const configPath, int (*getConfigChar)(FILE *file))
+	#define MATCHNAMELIST() /*---------------------------*/ local uint8            matchNameList(StringNodeRoot *const root, const char *const statementWall, char **statementCurrentReturn, uint8 *const valueReturn)
+	#define MATCHINTEGER() /*----------------------------*/ local uint8            matchInteger(char **statementCurrent, const char *const statementWall, int64 *const returnValue)
+	#define MATCHSTRING() /*-----------------------------*/ local bool             matchString(char **statementCurrent, char **stringReturn, uint *stringToken)
+	#define MATCHEXECUTE() /*----------------------------*/ local bool             matchExecute(char **statementCurrent, char **executeReturn, uint *executeToken)
+	#define READIMAGE() /*-------------------------------*/ local uint8            readImage(const char *const path, const char **errorMessage, Image *image)
+	#define EXEC() /*------------------------------------*/ local void             exec(const char *const string)
+	#define GETTIMESTAMP() /*----------------------------*/ local xcb_timestamp_t  getTimestamp(void)
+	#define GETPOINTERMONITOR() /*-----------------------*/ local Monitor *        getPointerMonitor(void)
+	#define COPYIMAGE() /*-------------------------------*/ local void             copyImage(Image *const source, Image *const destination)
+	#define COMPOSITEIMAGES() /*-------------------------*/ local void             compositeImages(void (*operation)(const uint32 *const, uint32 *const), const int sourceX, const int sourceY, Image *const source, const int destinationX, const int destinationY, Image *const destination)
+	#define COMPOSITEIMAGESOVER() /*---------------------*/ local void             compositeImagesOver(const uint32 *const source, uint32 *const destination)
+	#define COMPOSITEIMAGESAND() /*----------------------*/ local void             compositeImagesAnd(const uint32 *const source, uint32 *const destination)
+	#define TWOPASSBOXBLUR() /*--------------------------*/ local void             twoPassBoxBlur(const int width, const int height, uint32 *originalData, uint32 *intermediateData, uint32 *destinationData, const int boxSize)
+	#define CANCELTHREADS() /*---------------------------*/ local void             cancelThreads(void)
+	#define CLEANUP() /*---------------------------------*/ local void             cleanup(void)
+	#define PRINTUNACCOUNTEDFORPOINTERS() /*-------------*/ local void             printUnaccountedForPointers(const Pointer *current, const Pointer *wall)
+	#define PRINTERROR() /*------------------------------*/ local void             printError(const char *const message, ...)
+	#define PRINTTITLEDERROR() /*------------------------*/ local void             printTitledError(const char *const title, const char *const message)
+	#define PRINTTITLEDQUOTEDERROR() /*------------------*/ local void             printTitledQuotedError(const char *const title, const char *const argument, const char *const message)
+	#define PRINTCONNECTIONERROR() /*--------------------*/ local void             printConnectionError(void)
+	#define PRINTTITLEDNAMEDERROR() /*-------------------*/ local void             printTitledNamedError(const char *const title, const char *const message, const char *const name)
+	#define PRINTERROREVENT() /*-------------------------*/ local void             printErrorEvent(const void *const event)
+	#define PRINTTITLEDVALUEDERROR() /*------------------*/ local void             printTitledValuedError(const char *const title, const char *const message, const uint value)
+	#define PRINTCONFIGERROR() /*------------------------*/ local void             printConfigError(const char *const type, const char *const message, const char finalStatementCharacter, const bool printLine, const bool printConfig, const bool printPointer, const bool printPattern, const char *const configPath, const uint statementLine, const char *const statementStart, const char *const statementWall, const Instruction *instructionStart, const Instruction *instructionCurrent, StringNodeRoot *const *const instructionDataStart, const char *const *currentScopeInstructionList, const StringNodeRoot *const currentScopeInstructionRoot)
+	#define OPENERRORSTREAM() /*-------------------------*/ local bool             openErrorStream(void)
+	#define CLOSEERRORSTREAM() /*------------------------*/ local void             closeErrorStream(void)
+
+	#define xcb_wait_for_reply(a, b, c) /*---------------*/ (xcb_wait_for_reply(a, (b).sequence, c))
+	#define xcb_discard_reply(a, b) /*-------------------*/ (xcb_discard_reply(a, (b).sequence))
+	#define xcb_send_event(a, b, c, d, e) /*-------------*/ (xcb_send_event(a, b, c, d, (void *)(e)))
+
+	#define SELF(self) /*--------------------------------*/ self
+	#define STRING_ARRAY_SIZE(a) /*----------------------*/ (countof(a) - 1)
+
+	#define pushPointer(a, b, c) /*----------------------*/ (_pushPointer(a, b, (int (*const)(void *))(c)))
+	#define findString(a, b) /*--------------------------*/ (!getStringNode(a, (const char **const)(b)))
 
 	#if DEBUG
 		#define printXEvent(void) /*-----------*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %sX event:%s %s\n", colorStart, programName, colorEvent, colorEnd, (*event).response_type == randrBaseEvent + XCB_RANDR_SCREEN_CHANGE_NOTIFY? "screen change" : *(eventName + (((*event).response_type &= ~b(10000000)) > 35? countof(eventName) - 1 : (*event).response_type))))
@@ -291,6 +352,8 @@ SOFTWARE. */
 
 	def struct{
 		void * /*--------------*/ data;
+		uint32 /*--------------*/ dataToken;
+		uint8 /*---------------*/ pad0[4];
 		uint16 * /*------------*/ red;
 		uint16 * /*------------*/ green;
 		uint16 * /*------------*/ blue;
@@ -315,8 +378,19 @@ SOFTWARE. */
 		uint32 /*--------------*/ crtcSize;
 		xcb_window_t /*--------*/ window;
 		xcb_pixmap_t /*--------*/ pixmap;
+		xcb_gcontext_t /*------*/ gc;
 		bool /*----------------*/ windowMapped;
-		uint8 /*---------------*/ pad0[3];
+		uint8 /*---------------*/ pad0[6];
+
+
+
+		bool /*----------------*/ windowThreadCreated;
+		pthread_t /*-----------*/ windowThread;
+		pthread_mutex_t /*-----*/ windowMutex;
+		pthread_cond_t /*------*/ windowCond;
+
+
+
 	} Monitor;
 
 	def struct{
@@ -516,13 +590,14 @@ SOFTWARE. */
 	local StringNodeRoot /*---------------*/ globalScopesInstructionRoot;
 	local StringNodeRoot /*---------------*/ globalInstructionRoot;
 	local StringNodeRoot /*---------------*/ scope1ScopeInstructionRoot;
-	local StringNodeRoot /*---------------*/ modifierRoot;
-	local StringNodeRoot /*---------------*/ macroRoot;
 	local StringNodeRoot /*---------------*/ variableRoot;
-	local StringNodeRoot /*---------------*/ imageVariableRoot;
 	local StringNodeRoot /*---------------*/ horizontalAlignmentRoot;
 	local StringNodeRoot /*---------------*/ verticalAlignmentRoot;
 	local StringNodeRoot /*---------------*/ whichMonitorRoot;
+	local StringNodeRoot /*---------------*/ compositeImagesOperationRoot;
+	local StringNodeRoot /*---------------*/ imageVariableRoot;
+	local StringNodeRoot /*---------------*/ modifierRoot;
+	local StringNodeRoot /*---------------*/ macroRoot;
 	local StringNodeRoot /*---------------*/ commandRoot;
 	local ShortcutNodeRoot /*-------------*/ keycodeShortcut;
 	local ShortcutNodeRoot /*-------------*/ buttonShortcut;
@@ -549,9 +624,10 @@ SOFTWARE. */
 		, "expand"
 		, "contract"
 		, "read-config"
-		, "execute"
+		, "do"
 		, "set"
-		, "overlay"
+		, "copy-image"
+		, "composite-images"
 		, "grab-keycode"
 		, "grab-button"
 		, "ungrab-keycode"
@@ -564,6 +640,64 @@ SOFTWARE. */
 		, "expand"
 		, "contract"
 		, "stop"
+		, NULL
+	};
+	local const char *const /*------------*/ variableList[] = {
+		  "none"
+		, "x"
+		, "y"
+		, "x-offset"
+		, "y-offset"
+		, "horizontal-alignment"
+		, "vertical-alignment"
+		, "width"
+		, "height"
+		, "which-monitor-updates"
+		, "which-monitor-shows"
+		, "foreground-color"
+		, "background-color"
+		, "unchanged-brightness-image"
+		, "increased-brightness-image"
+		, "decreased-brightness-image"
+		, "common-overlay-image"
+		, "common-underlay-image"
+		, "blur-size"
+		, "duration"
+		, NULL
+	};
+	local const char *const /*------------*/ horizontalAlignmentList[] = {
+		  "none"
+		, "left"
+		, "center"
+		, "right"
+		, NULL
+	};
+	local const char *const /*------------*/ verticalAlignmentList[] = {
+		  "none"
+		, "top"
+		, "center"
+		, "bottom"
+		, NULL
+	};
+	local const char *const /*------------*/ whichMonitorList[] = {
+		  "none"
+		, "pointer"
+		, "all"
+		, NULL
+	};
+	local const char *const /*------------*/ compositeImagesOperationList[] = {
+		  "none"
+		, "over"
+		, "and"
+		, NULL
+	};
+	local const char *const /*------------*/ imageVariableList[] = {
+		  "none"
+		, "unchanged-brightness-image"
+		, "increased-brightness-image"
+		, "decreased-brightness-image"
+		, "common-overlay-image"
+		, "common-underlay-image"
 		, NULL
 	};
 	local const char *const /*------------*/ modifierList[] = {
@@ -591,58 +725,6 @@ SOFTWARE. */
 		, "button-5"
 		, NULL
 	};
-	local const char *const /*------------*/ variableList[] = {
-		  "none"
-		, "x"
-		, "y"
-		, "x-offset"
-		, "y-offset"
-		, "horizontal-alignment"
-		, "vertical-alignment"
-		, "width"
-		, "height"
-		, "which-monitor-updates"
-		, "which-monitor-shows"
-		, "foreground-color"
-		, "background-color"
-		, "unchanged-brightness-image"
-		, "increased-brightness-image"
-		, "decreased-brightness-image"
-		, "common-overlay-image"
-		, "common-underlay-image"
-		, "blur-size"
-		, "duration"
-		, NULL
-	};
-	local const char *const /*------------*/ imageVariableList[] = {
-		  "none"
-		, "unchanged-brightness-image"
-		, "increased-brightness-image"
-		, "decreased-brightness-image"
-		, "common-overlay-image"
-		, "common-underlay-image"
-		, NULL
-	};
-	local const char *const /*------------*/ horizontalAlignmentList[] = {
-		  "none"
-		, "left"
-		, "center"
-		, "right"
-		, NULL
-	};
-	local const char *const /*------------*/ verticalAlignmentList[] = {
-		  "none"
-		, "top"
-		, "center"
-		, "bottom"
-		, NULL
-	};
-	local const char *const /*------------*/ whichMonitorList[] = {
-		  "none"
-		, "pointer"
-		, "all"
-		, NULL
-	};
 	local const char *const /*------------*/ commandList[] = {
 		  "none"
 		, "execute"
@@ -658,117 +740,118 @@ SOFTWARE. */
 	local const Instruction /*------------*/ expandInstruction[] = {END_INSTRUCTION};
 	local const Instruction /*------------*/ contractInstruction[] = {END_INSTRUCTION};
 	local const Instruction /*------------*/ readConfigInstruction[] = {STRING_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ executeInstruction[] = {EXECUTE_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ doInstruction[] = {NAME_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ setInstruction[] = {NAME_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ overlayInstruction[] = {IMAGE_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ copyImageInstruction[] = {NAME_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ compositeImagesInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, NUMBER_INSTRUCTION, IMAGE_INSTRUCTION, NUMBER_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ grabKeycodeInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ grabButtonInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ ungrabKeycodeInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ ungrabButtonInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ stopInstruction[] = {END_INSTRUCTION};
 
-	local const Instruction /*------------*/ xSetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ ySetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ xOffsetSetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ yOffsetSetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ horizontalAlignmentSetSubInstruction[] = {NAME_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ verticalAlignmentSetSubInstruction[] = {NAME_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ widthSetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ heightSetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ whichMonitorUpdatesSetSubInstruction[] = {NAME_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ whichMonitorShowsSetSubInstruction[] = {NAME_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ foregroundColorSetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ backgroundColorSetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ unchangedBrightnessImageSetSubInstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ increasedBrightnessImageSetSubInstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ decreasedBrightnessImageSetSubInstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ commonOverlayImageSetSubInstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ commonUnderlayImageSetSubInstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ blurSizeSetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ durationSetSubInstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ executeGrabKeycodeSubInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, EXECUTE_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ executeGrabButtonSubInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, EXECUTE_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessUpGrabKeycodeSubInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessUpGrabButtonSubInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessDownGrabKeycodeSubInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessDownGrabButtonSubInstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ executeDoSubinstruction[] = {NAME_INSTRUCTION, EXECUTE_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ brightnessUpDoSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ brightnessDownDoSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ xSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ ySetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ xOffsetSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ yOffsetSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ horizontalAlignmentSetSubinstruction[] = {NAME_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ verticalAlignmentSetSubinstruction[] = {NAME_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ widthSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ heightSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ whichMonitorUpdatesSetSubinstruction[] = {NAME_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ whichMonitorShowsSetSubinstruction[] = {NAME_INSTRUCTION, NAME_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ foregroundColorSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ backgroundColorSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ unchangedBrightnessImageSetSubinstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ increasedBrightnessImageSetSubinstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ decreasedBrightnessImageSetSubinstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ commonOverlayImageSetSubinstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ commonUnderlayImageSetSubinstruction[] = {NAME_INSTRUCTION, IMAGE_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ blurSizeSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ durationSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ executeGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, EXECUTE_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ executeGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, EXECUTE_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ brightnessUpGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ brightnessUpGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ brightnessDownGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ brightnessDownGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
 
 	local StringNodeRoot *const *const /*-*/ helpInstructionData = NULL;
 	local StringNodeRoot *const *const /*-*/ expandInstructionData = NULL;
 	local StringNodeRoot *const *const /*-*/ contractInstructionData = NULL;
 	local StringNodeRoot *const *const /*-*/ readConfigInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ executeInstructionData = NULL;
+	local StringNodeRoot *const /*--------*/ doInstructionData[] = {&commandRoot};
 	local StringNodeRoot *const /*--------*/ setInstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ overlayInstructionData[] = {&imageVariableRoot};
+	local StringNodeRoot *const /*--------*/ copyImageInstructionData[] = {&imageVariableRoot, &imageVariableRoot};
+	local StringNodeRoot *const /*--------*/ compositeImagesInstructionData[] = {&compositeImagesOperationRoot, &imageVariableRoot};
 	local StringNodeRoot *const /*--------*/ grabKeycodeInstructionData[] = {&modifierRoot, &commandRoot};
 	local StringNodeRoot *const /*--------*/ grabButtonInstructionData[] = {&modifierRoot, &commandRoot};
 	local StringNodeRoot *const /*--------*/ ungrabKeycodeInstructionData[] = {&modifierRoot};
 	local StringNodeRoot *const /*--------*/ ungrabButtonInstructionData[] = {&modifierRoot};
 	local StringNodeRoot *const *const /*-*/ stopInstructionData = NULL;
 
-	local StringNodeRoot *const *const /*-*/ xSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ ySetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ xOffsetSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ yOffsetSetSubInstructionData = NULL;
-	local StringNodeRoot *const /*--------*/ horizontalAlignmentSetSubInstructionData[] = {&horizontalAlignmentRoot};
-	local StringNodeRoot *const /*--------*/ verticalAlignmentSetSubInstructionData[] = {&verticalAlignmentRoot};
-	local StringNodeRoot *const *const /*-*/ widthSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ heightSetSubInstructionData = NULL;
-	local StringNodeRoot *const /*--------*/ whichMonitorUpdatesSetSubInstructionData[] = {&whichMonitorRoot};
-	local StringNodeRoot *const /*--------*/ whichMonitorShowsSetSubInstructionData[] = {&whichMonitorRoot};
-	local StringNodeRoot *const *const /*-*/ foregroundColorSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ backgroundColorSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ unchangedBrightnessImageSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ increasedBrightnessImageSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ decreasedBrightnessImageSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ commonOverlayImageSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ commonUnderlayImageSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ blurSizeSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ durationSetSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ executeGrabKeycodeSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ executeGrabButtonSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ brightnessUpGrabKeycodeSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ brightnessUpGrabButtonSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ brightnessDownGrabKeycodeSubInstructionData = NULL;
-	local StringNodeRoot *const *const /*-*/ brightnessDownGrabButtonSubInstructionData = NULL;
-
-/*!
-	subinstructions with data?
-*/
+	local StringNodeRoot *const /*--------*/ executeDoSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ brightnessUpDoSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ brightnessDownDoSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ xSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ ySetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ xOffsetSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ yOffsetSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ horizontalAlignmentSetSubinstructionData[] = {&variableRoot, &horizontalAlignmentRoot};
+	local StringNodeRoot *const /*--------*/ verticalAlignmentSetSubinstructionData[] = {&variableRoot, &verticalAlignmentRoot};
+	local StringNodeRoot *const /*--------*/ widthSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ heightSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ whichMonitorUpdatesSetSubinstructionData[] = {&variableRoot, &whichMonitorRoot};
+	local StringNodeRoot *const /*--------*/ whichMonitorShowsSetSubinstructionData[] = {&variableRoot, &whichMonitorRoot};
+	local StringNodeRoot *const /*--------*/ foregroundColorSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ backgroundColorSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ unchangedBrightnessImageSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ increasedBrightnessImageSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ decreasedBrightnessImageSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ commonOverlayImageSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ commonUnderlayImageSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ blurSizeSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ durationSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ executeGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ executeGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ brightnessUpGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ brightnessUpGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ brightnessDownGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ brightnessDownGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
 
 	#define getInstruction(i) /*------------*/ (i##Instruction)
 	#define getInstructionData(i) /*--------*/ (i##InstructionData)
-	#define getSubInstructionData(i) /*-----*/ (i##SubInstructionData)
-	#define getGlobalScopeInstruction(i) /*-*/ { \
+	#define getGlobalScope(i) /*-*/ { \
 		  get##i(help) \
 		, get##i(expand) \
 		, get##i(contract) \
 		, get##i(readConfig) \
-		, get##i(execute) \
+		, get##i(do) \
 		, get##i(set) \
-		, get##i(overlay) \
+		, get##i(copyImage) \
+		, get##i(compositeImages) \
 		, get##i(grabKeycode) \
 		, get##i(grabButton) \
 		, get##i(ungrabKeycode) \
 		, get##i(ungrabButton) \
 		, get##i(stop) \
 	}
-	#define getScope1ScopeInstruction(i) /*-*/ { \
+	#define getScope1Scope(i) /*-*/ { \
 		  get##i(help) \
 		, get##i(expand) \
 		, get##i(contract) \
 		, get##i(stop) \
 	}
-	#define getGlobalScopeSubInstruction(i) /*-*/ { \
-		\
-	}
-	local const Instruction *const /*-----*/ globalScopeInstruction[] = getGlobalScopeInstruction(Instruction);
-	local const Instruction *const /*-----*/ scope1ScopeInstruction[] = getScope1ScopeInstruction(Instruction);
+	local const Instruction *const /*-----*/ globalScopeInstruction[] = getGlobalScope(Instruction);
+	local const Instruction *const /*-----*/ scope1ScopeInstruction[] = getScope1Scope(Instruction);
 
-	local StringNodeRoot *const *const /*-*/ globalScopeInstructionData[] = getGlobalScopeInstruction(InstructionData);
-	local StringNodeRoot *const *const /*-*/ scope1ScopeInstructionData[] = getScope1ScopeInstruction(InstructionData);
-	#undef  getScope1ScopeInstruction
-	#undef  getGlobalScopeInstruction
+	local StringNodeRoot *const *const /*-*/ globalScopeInstructionData[] = getGlobalScope(InstructionData);
+	local StringNodeRoot *const *const /*-*/ scope1ScopeInstructionData[] = getScope1Scope(InstructionData);
+	#undef  getScope1Scope
+	#undef  getGlobalScope
 	#undef  getInstructionData
 	#undef  getInstruction
 
@@ -813,6 +896,7 @@ SOFTWARE. */
 	EXEC();
 	GETTIMESTAMP();
 	GETPOINTERMONITOR();
+	COPYIMAGE();
 	COMPOSITEIMAGES();
 	COMPOSITEIMAGESOVER();
 	COMPOSITEIMAGESAND();
@@ -855,8 +939,8 @@ SOFTWARE. */
 	local uint /*------------*/ averageBrightness;
 	local pthread_t /*-------*/ sleepThread;
 	local bool /*------------*/ sleepThreadCreated;
-	local pthread_mutex_t /*-*/ sleepLock;
-	local pthread_cond_t /*--*/ sleepCondition;
+	local pthread_mutex_t /*-*/ sleepMutex;
+	local pthread_cond_t /*--*/ sleepCond;
 
 /*! config globals */
 	local int /*-------------*/ x;
@@ -881,48 +965,6 @@ SOFTWARE. */
 	local uint /*------------*/ nanoseconds;
 
 
-
-#define NONE_WHICH_MONITOR /*-------------------------*/ (0)
-#define POINTER_WHICH_MONITOR /*----------------------*/ (1)
-#define ALL_WHICH_MONITOR /*--------------------------*/ (2)
-
-#define NONE_VARIABLE /*------------------------------*/ (0)
-#define X_VARIABLE /*---------------------------------*/ (1)
-#define Y_VARIABLE /*---------------------------------*/ (2)
-#define X_OFFSET_VARIABLE /*--------------------------*/ (3)
-#define Y_OFFSET_VARIABLE /*--------------------------*/ (4)
-#define HORIZONTAL_ALIGNMENT_VARIABLE /*--------------*/ (5)
-#define VERTICAL_ALIGNMENT_VARIABLE /*----------------*/ (6)
-#define WIDTH_VARIABLE /*-----------------------------*/ (7)
-#define HEIGHT_VARIABLE /*----------------------------*/ (8)
-#define WHICH_MONITOR_UPDATES_VARIABLE /*-------------*/ (9)
-#define WHICH_MONITOR_SHOWS_VARIABLE /*---------------*/ (10)
-#define FOREGROUND_COLOR_VARIABLE /*------------------*/ (11)
-#define BACKGROUND_COLOR_VARIABLE /*------------------*/ (12)
-#define UNCHANGED_BRIGHTNESS_IMAGE_VARIABLE /*--------*/ (13)
-#define INCREASED_BRIGHTNESS_IMAGE_VARIABLE /*--------*/ (14)
-#define DECREASED_BRIGHTNESS_IMAGE_VARIABLE /*--------*/ (15)
-#define COMMON_OVERLAY_IMAGE_VARIABLE /*--------------*/ (16)
-#define COMMON_UNDERLAY_IMAGE_VARIABLE /*-------------*/ (17)
-#define BLUR_SIZE_VARIABLE /*-------------------------*/ (18)
-#define DURATION_VARIABLE /*--------------------------*/ (19)
-
-#define NONE_IMAGE_VARIABLE /*------------------------*/ (0)
-#define UNCHANGED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE /*--*/ (1)
-#define INCREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE /*--*/ (2)
-#define DECREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE /*--*/ (3)
-#define COMMON_OVERLAY_IMAGE_IMAGE_VARIABLE /*--------*/ (4)
-#define COMMON_UNDERLAY_IMAGE_IMAGE_VARIABLE /*-------*/ (5)
-
-#define NONE_HORIZONTAL_ALIGNMENT /*------------------*/ (0)
-#define LEFT_HORIZONTAL_ALIGNMENT /*------------------*/ (1)
-#define CENTER_HORIZONTAL_ALIGNMENT /*----------------*/ (2)
-#define RIGHT_HORIZONTAL_ALIGNMENT /*-----------------*/ (3)
-
-#define NONE_VERTICAL_ALIGNMENT /*--------------------*/ (0)
-#define TOP_VERTICAL_ALIGNMENT /*---------------------*/ (1)
-#define CENTER_VERTICAL_ALIGNMENT /*------------------*/ (2)
-#define BOTTOM_VERTICAL_ALIGNMENT /*------------------*/ (3)
 
 #define NONE_NORMAL_HINT /*---------------------------*/ (b(0000000000))
 #define USER_POSITION_NORMAL_HINT /*------------------*/ (b(0000000001))
@@ -963,19 +1005,17 @@ SOFTWARE. */
 #include <time.h>
 
 #define GETMONITORGAMMA() /*---------*/ local bool   getMonitorGamma(void)
-#define SETBRIGHTNESS() /*-----------*/ local void   setBrightness(int brightness, const bool raisingVolume)
+#define SETBRIGHTNESS() /*-----------*/ local void   setBrightness(int brightness, const bool raisingBrightness)
 
 #define SLEEPMAIN() /*---------------*/ local void * sleepMain(void *arg)
-#define DRAWWINDOW() /*--------------*/ local void   drawWindow(void)
+#define DRAWWINDOWMAIN() /*----------*/ local void * drawWindowMain(void *arg)
+#define DRAWWINDOW() /*--------------*/ local void   drawWindow(Monitor *const monitor, const xcb_drawable_t drawable)
 #define FREEMONITORS() /*------------*/ local void   freeMonitors(void)
-#define FINDNONCLAMPED() /*----------*/ local uint   findNonClamped(const uint16 *arrayCurrent, const int size)
-#define DOUBLEROUND() /*-------------*/ local double doubleRound(double number)
 
 SLEEPMAIN();
+DRAWWINDOWMAIN();
 DRAWWINDOW();
 FREEMONITORS();
-FINDNONCLAMPED();
-DOUBLEROUND();
 
 
 
@@ -985,10 +1025,13 @@ DOUBLEROUND();
 
 
 
-#ifdef a
 #define MIN() /*---------------------*/ local double min(const double x, const double y)
+#define ROUNDDOUBLE() /*-------------*/ local double roundDouble(double number)
+#define FINDNONCLAMPED() /*----------*/ local uint   findNonClamped(const uint16 *arrayCurrent, const int size)
 
 MIN();
+ROUNDDOUBLE();
+FINDNONCLAMPED();
 
 MIN(){
 	if(x < y){
@@ -996,7 +1039,12 @@ MIN(){
 	}
 	ret y;
 }
-#endif
+ROUNDDOUBLE(){
+	double doubleNumber;
+	number *= 100;
+	doubleNumber = (int)number;
+	ret doubleNumber / 100 + (number - doubleNumber >= 0.5) * 0.01;
+}
 FINDNONCLAMPED(){
 	const uint16 *const arrayStart = arrayCurrent - size;
 	jmp loop;
@@ -1009,12 +1057,6 @@ FINDNONCLAMPED(){
 		}
 	}
 	ret 1;
-}
-DOUBLEROUND(){
-	double doubleNumber;
-	number *= 100;
-	doubleNumber = (int)number;
-	ret doubleNumber / 100 + (number - doubleNumber >= 0.5) * 0.01;
 }
 GETMONITORGAMMA(){
 
@@ -1111,7 +1153,7 @@ GETMONITORGAMMA(){
 						i2 = (double)(bestLastObservation + 1) / gammaSize;
 						v1 = (double)(*(bestColorArray + middleObservation  )) / 65535;
 						v2 = (double)(*(bestColorArray + bestLastObservation)) / 65535;
-						if(doubleRound(v2) < 0.01){
+						if(roundDouble(v2) < 0.01){
 							configuredBrightness = 0.0;
 							redGamma   = 1.0;
 							greenGamma = 1.0;
@@ -1125,10 +1167,10 @@ GETMONITORGAMMA(){
 							redGamma   = log((double)red  [lastRedObservation   / 2] / configuredBrightness / 65535) / log((double)(lastRedObservation   / 2 + 1) / gammaSize);
 							greenGamma = log((double)green[lastGreenObservation / 2] / configuredBrightness / 65535) / log((double)(lastGreenObservation / 2 + 1) / gammaSize);
 							blueGamma  = log((double)blue [lastBlueObservation  / 2] / configuredBrightness / 65535) / log((double)(lastBlueObservation  / 2 + 1) / gammaSize);
-							configuredBrightness = doubleRound(configuredBrightness);
-							redGamma   = doubleRound(redGamma);
-							greenGamma = doubleRound(greenGamma);
-							blueGamma  = doubleRound(blueGamma);
+							configuredBrightness = roundDouble(configuredBrightness);
+							redGamma   = roundDouble(redGamma);
+							greenGamma = roundDouble(greenGamma);
+							blueGamma  = roundDouble(blueGamma);
 							if(!configuredBrightness) configuredBrightness = 1.0;
 							if(!redGamma)             redGamma             = 1.0;
 							if(!greenGamma)           greenGamma           = 1.0;
@@ -1154,21 +1196,21 @@ GETMONITORGAMMA(){
 
 }
 SETBRIGHTNESS(){
-#ifdef a
-	if(raisingVolume){
+	if(!raisingBrightness){
 		brightness = -brightness;
 	}
-	switch whichMonitorUpdates over
-#endif
+
+	/*! replace this with the which monitor doohickeys */
+	int whichMonitor = -1;
+
 
 
 	/*! understand how this works */
 
 
 
-#ifdef a
 	Monitor *monitorCurrent = monitorStart;
-	Monitor *wall = monitorWall;
+	Monitor *wall = monitorCurrent + monitorAllocated;
 	double brightnessOffset = brightness;
 	uint brightnessCounter = 0;
 	double average = 0.0;
@@ -1241,55 +1283,6 @@ SETBRIGHTNESS(){
 	}
 	averageBrightness = average * 100 / brightnessCounter;
 	ret;
-#endif
-
-
-
-}
-
-
-
-DRAWWINDOW(){
-
-
-
-#ifdef a
-	/*! should this be kept but also create an initial frame as a background pixmap? */
-
-	/*! how can the user place the window effectively and what happens should the above pixels are not part of the screen */
-
-	Texture t;
-	uint token;
-	xcb_get_image_reply_t *reply;
-	t.width = width;
-	t.height = height;
-	t.size = width * height * 4;
-	t.data = data;
-	reply = xcb_get_image_reply(connection, xcb_get_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, (*screen).root, x, y - height, width, height, -1), NULL);
-	token = 0;
-	if(reply){
-		doubleBoxBlur(width, height, (void *)xcb_get_image_data(reply), intermediateData, data, blurSize);
-		filterTexture(commonUnderlayImage, t);
-		free(reply);
-	}
-	{
-		Texture texture;
-		if(averageBrightness == oldAverageBrightness){
-			texture = unchangedBrightnessImage;
-		}elif(averageBrightness > oldAverageBrightness){
-			texture = increasedBrightnessImage;
-		}else{
-			texture = decreasedBrightnessImage;
-		}
-		realApplyTexture1(texture, t);
-	}
-	{
-		const uint largePercentage = (100 - averageBrightness) * commonOverlayImage.height / 100;
-		realApplyTexture1WithXY(0, largePercentage, 0, (t.height - commonOverlayImage.height) / 2 + largePercentage, commonOverlayImage, t);
-	}
-	xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, window, gc, width, height, 0, 0, 0, depth, t.size, (void *)t.data);
-	ret;
-#endif
 
 
 
@@ -1300,30 +1293,6 @@ DRAWWINDOW(){
 
 
 
-
-
-
-		/*! config notes */
-			/*! copy image buffer into somewhere else somehow via config */
-			/*! institute instruction to execute program commands instead of system commands. or maybe make those commands instructions unto themselves */
-			/*! the icon could not only be set but updated whenever the user updates the brightness */
-
-
-
-		/*! implement these in the config
-
-			v   | set unchanged-brightness-image "/home/steven/Documents/microbrightness/assets/bars_unfilled.bmp";
-			  x | overlay "/home/steven/Documents/microbrightness/assets/sun.bmp" unchanged-brightness-image;
-
-			  x | copy unchanged-brightness-image increased-brightness-image;
-			  x | overlay "/home/steven/Documents/microbrightness/assets/plus.bmp" increased-brightness-image
-
-			  x | copy unchanged-brightness-image decreased-brightness-image;
-			  x | overlay "/home/steven/Documents/microbrightness/assets/minus.bmp" decreased-brightness-image
-
-			v   | set common-overlay-image "/home/steven/Documents/microbrightness/assets/bars_filled.bmp";
-			v   | set common-underlay-image "/home/steven/Documents/microbrightness/assets/wallpaper.bmp";
-		*/
 
 
 
@@ -1339,6 +1308,40 @@ DRAWWINDOW(){
 		pixelGStart = malloc(blurSize + 2 * width * height * sizeof(uint32));
 		pixelBStart = malloc(blurSize + 2 * width * height * sizeof(uint32));
 #endif
+
+
+
+#define MEMORYCOPY() /*-*/ local void memoryCopy(void *sourceStart, void *destinationStart, const uint byteAmount)
+
+MEMORYCOPY();
+
+MEMORYCOPY(){
+	const uint largeAmount = byteAmount / 64;
+	const uint smallAmount = byteAmount - largeAmount * 64;
+	void *sourceCurrent = sourceStart;
+	void *destinationCurrent = destinationStart;
+	void *sourceWall = (uint64 *)sourceCurrent + largeAmount;
+	jmp largeLoop;
+	largeLoop:{
+		if((uint64 *)sourceCurrent < (uint64 *)sourceWall){
+			*(uint64 *)destinationCurrent = *(uint64 *)sourceCurrent;
+			sourceCurrent = (uint64 *)sourceCurrent + 1;
+			destinationCurrent = (uint64 *)destinationCurrent + 1;
+			jmp largeLoop;
+		}
+		sourceWall = (uint8 *)sourceCurrent + smallAmount;
+		jmp smallLoop;
+	}
+	smallLoop:{
+		if((uint8 *)sourceCurrent < (uint8 *)sourceWall){
+			*(uint8 *)destinationCurrent = *(uint8 *)sourceCurrent;
+			sourceCurrent = (uint8 *)sourceCurrent + 1;
+			destinationCurrent = (uint8 *)destinationCurrent + 1;
+			jmp smallLoop;
+		}
+		ret;
+	}
+}
 
 
 
@@ -1408,11 +1411,11 @@ int main(int argumentAmount, const char *const *argument){
 
 
 
-		if(pthread_mutex_init(&sleepLock, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
+		if(pthread_mutex_init(&sleepMutex, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
 			printTitledError("pthread error", "could not init sleep mutex");
 		}
-		if(pthread_cond_init(&sleepCondition, NULL) != PTHREAD_COND_INIT_SUCCESS){
-			printTitledError("pthread error", "could not init sleep condition");
+		if(pthread_cond_init(&sleepCond, NULL) != PTHREAD_COND_INIT_SUCCESS){
+			printTitledError("pthread error", "could not init sleep cond");
 		}
 
 
@@ -1426,12 +1429,14 @@ int main(int argumentAmount, const char *const *argument){
 		setStringRoot(&globalScopesInstructionRoot);
 		setStringRoot(&globalInstructionRoot);
 		setStringRoot(&scope1ScopeInstructionRoot);
-		setStringRoot(&modifierRoot);
-		setStringRoot(&macroRoot);
 		setStringRoot(&variableRoot);
 		setStringRoot(&horizontalAlignmentRoot);
 		setStringRoot(&verticalAlignmentRoot);
 		setStringRoot(&whichMonitorRoot);
+		setStringRoot(&compositeImagesOperationRoot);
+		setStringRoot(&imageVariableRoot);
+		setStringRoot(&modifierRoot);
+		setStringRoot(&macroRoot);
 		setStringRoot(&commandRoot);
 		setShortcutRoot(&keycodeShortcut);
 		setShortcutRoot(&buttonShortcut);
@@ -1932,10 +1937,10 @@ int main(int argumentAmount, const char *const *argument){
 		iterator = xcb_randr_get_monitors_monitors_iterator(reply);
 		monitorCurrent = monitorStart;
 		monitorWall = monitorStart + monitorAllocated;
-		valueList.backgroundColor = 0x00000000;
+		valueList.backgroundColor = 0xFF000000;
 		valueList.borderColor = 0x00000000;
 		valueList.overrideRedirect = true;
-		valueList.eventMask = XCB_EVENT_MASK_EXPOSURE;
+		valueList.eventMask = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY; /*! keep structure notify? */
 		valueList.colormap = colormap;
 		jmp storeMonitorLoop;
 		storeMonitorLoop:{
@@ -1946,6 +1951,11 @@ int main(int argumentAmount, const char *const *argument){
 				const int w = (*data).width;
 				const int h = (*data).height;
 				const xcb_window_t window = xcb_generate_id(connection);
+				const char *const name = "microbrightness";
+				const char *const class = "microbrightness\0microbrightness\0";
+				const uint32 desktop = 0xFFFFFFFF;
+				const xcb_atom_t type = atom._NET_WM_WINDOW_TYPE_NORMAL;
+				const pid_t pid = getpid();
 				Crtc *storedCrtcCurrent;
 				xcb_randr_get_output_info_reply_t *infoReply;
 				uint infoToken;
@@ -1953,30 +1963,6 @@ int main(int argumentAmount, const char *const *argument){
 				xcb_randr_crtc_t *crtcWall;
 				xcb_randr_output_t *outputCurrent = xcb_randr_monitor_info_outputs(iterator.data);
 				xcb_randr_output_t *const outputWall = outputCurrent + xcb_randr_monitor_info_outputs_length(iterator.data);
-				(*monitorCurrent).leftX = x;
-				(*monitorCurrent).topY = y;
-				(*monitorCurrent).rightX = x + w;
-				(*monitorCurrent).bottomY = y + h;
-				(*monitorCurrent).w = w;
-				(*monitorCurrent).h = h;
-				(*monitorCurrent).window = window;
-				(*monitorCurrent).pixmap = 0;
-				(*monitorCurrent).windowMapped = false;
-
-
-
-
-
-
-
-
-
-#define GETHOSTNAME_SUCCESS /*-*/ (0)
-				const char *const name = "microbrightness";
-				const char *const class = "microbrightness\0microbrightness\0";
-				const uint32 desktop = 0xFFFFFFFF;
-				const xcb_atom_t type = atom._NET_WM_WINDOW_TYPE_NORMAL;
-				const pid_t pid = getpid();
 #ifdef a
 				/*! set width and height 1 and later set with real width and height */
 				struct{
@@ -2019,6 +2005,26 @@ int main(int argumentAmount, const char *const *argument){
 				normalHints.baseHeight = height;
 				normalHints.winGravity = XCB_GRAVITY_NORTH_WEST;
 #endif
+				(*monitorCurrent).leftX = x;
+				(*monitorCurrent).topY = y;
+				(*monitorCurrent).rightX = x + w;
+				(*monitorCurrent).bottomY = y + h;
+				(*monitorCurrent).w = w;
+				(*monitorCurrent).h = h;
+				(*monitorCurrent).window = window;
+				(*monitorCurrent).pixmap = 0;
+				(*monitorCurrent).gc = xcb_generate_id(connection);
+				(*monitorCurrent).windowMapped = false;
+
+
+
+
+
+
+
+
+
+#define GETHOSTNAME_SUCCESS /*-*/ (0)
 				hints.flags = INPUT_HINT | STATE_HINT;
 				hints.input = false;
 				hints.initialState = NORMAL_STATE;
@@ -2082,6 +2088,17 @@ int main(int argumentAmount, const char *const *argument){
 					}
 				}
 				xcb_create_window(connection, depth, window, (*screen).root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP, &valueList);
+				xcb_create_gc(connection, (*monitorCurrent).gc, window, XCB_NONE, NULL);
+				if(pthread_mutex_init(&(*monitorCurrent).windowMutex, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
+					printTitledError("pthread error", "could not init window mutex");
+				}
+				if(pthread_cond_init(&(*monitorCurrent).windowCond, NULL) != PTHREAD_COND_INIT_SUCCESS){
+					printTitledError("pthread error", "could not init window cond");
+				}
+				(*monitorCurrent).windowThreadCreated = pthread_create(&(*monitorCurrent).windowThread, NULL, drawWindowMain, monitorCurrent) == PTHREAD_CREATE_SUCCESS;
+				if(!(*monitorCurrent).windowThreadCreated){
+					printTitledError("pthread error", "could not create window thread");
+				}
 
 
 
@@ -2157,13 +2174,14 @@ int main(int argumentAmount, const char *const *argument){
 		bulkInsertString(&globalScopesInstructionRoot, globalScopesInstructionList);
 		bulkInsertString(&globalInstructionRoot, globalInstructionList);
 		bulkInsertString(&scope1ScopeInstructionRoot, scope1ScopeInstructionList);
-		bulkInsertString(&modifierRoot, modifierList);
-		bulkInsertString(&macroRoot, macroList);
 		bulkInsertString(&variableRoot, variableList);
-		bulkInsertString(&imageVariableRoot, imageVariableList);
 		bulkInsertString(&horizontalAlignmentRoot, horizontalAlignmentList);
 		bulkInsertString(&verticalAlignmentRoot, verticalAlignmentList);
 		bulkInsertString(&whichMonitorRoot, whichMonitorList);
+		bulkInsertString(&compositeImagesOperationRoot, compositeImagesOperationList);
+		bulkInsertString(&imageVariableRoot, imageVariableList);
+		bulkInsertString(&modifierRoot, modifierList);
+		bulkInsertString(&macroRoot, macroList);
 		bulkInsertString(&commandRoot, commandList);
 		jmp readConfig;
 	}
@@ -2207,18 +2225,6 @@ int main(int argumentAmount, const char *const *argument){
 		if(!blurSize){
 			blurSize = 1;
 		}
-
-
-
-		/*! remove once readConfig() supports subinstruction data */
-
-		horizontalAlignment = CENTER_HORIZONTAL_ALIGNMENT;
-		verticalAlignment = CENTER_VERTICAL_ALIGNMENT;
-		whichMonitorUpdates = POINTER_WHICH_MONITOR;
-		whichMonitorShows = POINTER_WHICH_MONITOR;
-
-
-
 		jmp eventLoopCheckShortcuts;
 	}
 	eventLoopCheckShortcuts:{
@@ -2275,11 +2281,11 @@ int main(int argumentAmount, const char *const *argument){
 			to XCB_VISIBILITY_NOTIFY: /*-*/ /*----------------*/ jmp unexpectedEvent;
 			to XCB_CREATE_NOTIFY: /*-----*/ /*----------------*/ jmp unexpectedEvent; /*! what happens then? */
 			to XCB_DESTROY_NOTIFY: /*----*/ /*----------------*/ jmp unexpectedEvent; /*! what happens then? */
-			to XCB_UNMAP_NOTIFY: /*------*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_UNMAP_NOTIFY: /*------*/ /*----------------*/ jmp unexpectedEvent; /*! what happens then? */
 			to XCB_MAP_NOTIFY: /*--------*/ jmp mapNotifyEvent;
 			to XCB_MAP_REQUEST: /*-------*/ jmp unexpectedEvent;
 			to XCB_REPARENT_NOTIFY: /*---*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_CONFIGURE_NOTIFY: /*--*/ /*----------------*/ jmp unexpectedEvent;
+			to XCB_CONFIGURE_NOTIFY: /*--*/ /*----------------*/ jmp unexpectedEvent; /*! what happens then? */
 			to XCB_CONFIGURE_REQUEST: /*-*/ jmp unexpectedEvent;
 			to XCB_GRAVITY_NOTIFY: /*----*/ jmp unexpectedEvent;
 			to XCB_RESIZE_REQUEST: /*----*/ jmp unexpectedEvent;
@@ -2374,14 +2380,34 @@ int main(int argumentAmount, const char *const *argument){
 		#undef  e
 	}
 	exposeEvent:{
-
-
-
-		/*!*/
-
-
-
-		jmp eventLoop;
+		#define e /*-*/ ((xcb_expose_event_t *)event)
+		const xcb_window_t eventWindow = (*e).window;
+		Monitor *current = monitorStart;
+		Monitor *const wall = current + monitorAllocated;
+		jmp findMonitorLoop;
+		findMonitorLoop:{
+			if(current < wall){
+				if((*current).window == eventWindow){
+					jmp signalWindowThread;
+				}
+				inc current;
+				jmp findMonitorLoop;
+			}
+			jmp eventLoop;
+		}
+		signalWindowThread:{
+			if(pthread_mutex_lock(&(*current).windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+				printTitledError("pthread error", "could not lock window mutex");
+			}
+			if(pthread_cond_signal(&(*current).windowCond) != PTHREAD_COND_SIGNAL_SUCCESS){
+				printTitledError("pthread error", "could not signal window thread");
+			}
+			if(pthread_mutex_unlock(&(*current).windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+				printTitledError("pthread error", "could not unlock window mutex");
+			}
+			jmp eventLoop;
+		}
+		#undef  e
 	}
 	mapNotifyEvent:{
 
@@ -2467,14 +2493,26 @@ int main(int argumentAmount, const char *const *argument){
 			to POINTER_WHICH_MONITOR:{
 				current = getPointerMonitor();
 				wall = current + 1;
-				oldAverageBrightness = averageBrightness;
+
+
+
+				/*! oldAverageBrightness = averageBrightness; */
+
+
+
 				getMonitorGamma();
 				jmp mapWindowLoop;
 			}
 			to ALL_WHICH_MONITOR:{
 				current = monitorStart;
 				wall = current + monitorAllocated;
-				oldAverageBrightness = averageBrightness;
+
+
+
+				/*! oldAverageBrightness = averageBrightness; */
+
+
+
 				getMonitorGamma();
 				jmp mapWindowLoop;
 			}
@@ -2510,19 +2548,29 @@ int main(int argumentAmount, const char *const *argument){
 			jmp signalSleepThread;
 		}
 		signalSleepThread:{
-			if(pthread_mutex_lock(&sleepLock) != PTHREAD_MUTEX_LOCK_SUCCESS){
+			if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 				printTitledError("pthread error", "could not lock sleep mutex");
 			}
-			if(pthread_cond_signal(&sleepCondition) != PTHREAD_COND_SIGNAL_SUCCESS){
+			if(pthread_cond_signal(&sleepCond) != PTHREAD_COND_SIGNAL_SUCCESS){
 				printTitledError("pthread error", "could not signal sleep thread");
 			}
-			if(pthread_mutex_unlock(&sleepLock) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+			if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
 				printTitledError("pthread error", "could not unlock sleep mutex");
 			}
 			jmp eventLoopCheckShortcuts;
 		}
 	}
 	restartCommand:{
+		free(unchangedBrightnessImage.data);
+		popPointer(unchangedBrightnessImage.dataToken);
+		free(increasedBrightnessImage.data);
+		popPointer(increasedBrightnessImage.dataToken);
+		free(decreasedBrightnessImage.data);
+		popPointer(decreasedBrightnessImage.dataToken);
+		free(commonOverlayImage.data);
+		popPointer(commonOverlayImage.dataToken);
+		free(commonUnderlayImage.data);
+		popPointer(commonUnderlayImage.dataToken);
 		ungrabShortcuts();
 		resetShortcutRoot(&buttonShortcut);
 		resetShortcutRoot(&keycodeShortcut);
@@ -2546,13 +2594,14 @@ int main(int argumentAmount, const char *const *argument){
 		deleteShortcutRoot(&buttonShortcut);
 		deleteShortcutRoot(&keycodeShortcut);
 		deleteStringRoot(&commandRoot);
+		deleteStringRoot(&macroRoot);
+		deleteStringRoot(&modifierRoot);
+		deleteStringRoot(&imageVariableRoot);
+		deleteStringRoot(&compositeImagesOperationRoot);
 		deleteStringRoot(&whichMonitorRoot);
 		deleteStringRoot(&verticalAlignmentRoot);
 		deleteStringRoot(&horizontalAlignmentRoot);
-		deleteStringRoot(&imageVariableRoot);
 		deleteStringRoot(&variableRoot);
-		deleteStringRoot(&macroRoot);
-		deleteStringRoot(&modifierRoot);
 		deleteStringRoot(&scope1ScopeInstructionRoot);
 		deleteStringRoot(&globalInstructionRoot);
 		deleteStringRoot(&globalScopesInstructionRoot);
@@ -2923,15 +2972,27 @@ SLEEPMAIN(){
 
 	Monitor *current;
 	Monitor *wall;
-	jmp waitIndefinitely;
+	(void)arg;
+	jmp setThreadCancelationInformation;
+	setThreadCancelationInformation:{
+		int oldState;
+		int oldType;
+		if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &oldState) != PTHREAD_SETCANCELSTATE_SUCCESS){
+			printTitledError("pthread error", "could not set cancel state of sleep thread");
+		}
+		if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &oldType) != PTHREAD_SETCANCELTYPE_SUCCESS){
+			printTitledError("pthread error", "could not set cancel type of sleep thread");
+		}
+		jmp waitIndefinitely;
+	}
 	waitIndefinitely:{
-		if(pthread_mutex_lock(&sleepLock) != PTHREAD_MUTEX_LOCK_SUCCESS){
+		if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock sleep mutex");
 		}
-		if(pthread_cond_wait(&sleepCondition, &sleepLock) != PTHREAD_COND_WAIT_SUCCESS){
+		if(pthread_cond_wait(&sleepCond, &sleepMutex) != PTHREAD_COND_WAIT_SUCCESS){
 			printTitledError("pthread error", "could not wait sleep mutex");
 		}
-		if(pthread_mutex_unlock(&sleepLock) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+		if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock sleep mutex");
 		}
 		jmp waitUntilTimedOut;
@@ -2942,15 +3003,15 @@ SLEEPMAIN(){
 		clock_gettime(CLOCK_REALTIME, &ts);
 		ts.tv_sec += seconds;
 		ts.tv_nsec += nanoseconds;
-		if(pthread_mutex_lock(&sleepLock) != PTHREAD_MUTEX_LOCK_SUCCESS){
+		if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock sleep mutex");
 		}
-		waitReturn = pthread_cond_timedwait(&sleepCondition, &sleepLock, &ts);
+		waitReturn = pthread_cond_timedwait(&sleepCond, &sleepMutex, &ts);
 		if(waitReturn != ETIMEDOUT and waitReturn != PTHREAD_COND_TIMEDWAIT_SUCCESS){
 			printTitledError("pthread error", "could not wait sleep mutex");
 			jmp waitIndefinitely;
 		}
-		if(pthread_mutex_unlock(&sleepLock) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+		if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock sleep mutex");
 			jmp waitIndefinitely;
 		}
@@ -2981,6 +3042,168 @@ SLEEPMAIN(){
 		jmp waitIndefinitely;
 	}
 	ret NULL;
+}
+DRAWWINDOWMAIN(){
+	Monitor *const monitor = arg;
+	jmp setThreadCancelationInformation;
+	setThreadCancelationInformation:{
+		int oldState;
+		int oldType;
+		if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &oldState) != PTHREAD_SETCANCELSTATE_SUCCESS){
+			printTitledError("pthread error", "could not set cancel state of window thread");
+		}
+		if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &oldType) != PTHREAD_SETCANCELTYPE_SUCCESS){
+			printTitledError("pthread error", "could not set cancel type of window thread");
+		}
+		jmp waitIndefinitely;
+	}
+	waitIndefinitely:{
+		if(pthread_mutex_lock(&(*monitor).windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+			printTitledError("pthread error", "could not lock window mutex");
+		}
+		if(pthread_cond_wait(&(*monitor).windowCond, &(*monitor).windowMutex) != PTHREAD_COND_WAIT_SUCCESS){
+			printTitledError("pthread error", "could not wait window mutex");
+		}
+		if(pthread_mutex_unlock(&(*monitor).windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+			printTitledError("pthread error", "could not lock window mutex");
+		}
+		jmp waitUntilTimedOut;
+	}
+	waitUntilTimedOut:{
+		if((*monitor).windowMapped){
+			drawWindow(monitor, (*monitor).window);
+			jmp waitUntilTimedOut;
+		}
+		jmp waitIndefinitely;
+	}
+	ret NULL;
+}
+DRAWWINDOW(){
+
+
+
+	/*! what if images point to NULL? remove all image setting instructions from .conf and test */
+
+
+
+	/*! should this be kept but also create an initial frame as a background pixmap? */
+
+	/*! what happens should the above pixels be not part of the screen */
+
+	/*! what about x, y positions of images when compositing? */
+
+
+
+	Image image;
+	image.data = NULL;
+	image.dataToken = 0;
+	if(blurSize > 1){
+		xcb_get_image_reply_t *reply;
+		uint token;
+		int xUsed;
+		int yUsed;
+		image.width = width;
+		image.height = height;
+		image.size = width * height * 4;
+		switch horizontalAlignment over
+			to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ xUsed = (*monitor).leftX; /*------------------------------*/ brk;
+			to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ xUsed = (*monitor).leftX + ((*monitor).w - width) / 2; /*-*/ brk;
+			to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ xUsed = (*monitor).rightX - width; /*---------------------*/ brk;
+			off: /*----------------------------*/ xUsed = x; /*---------------------------------------------*/ brk;
+		end
+		switch verticalAlignment over
+			to TOP_VERTICAL_ALIGNMENT: /*----*/ yUsed = (*monitor).topY; /*-------------------------------*/ brk;
+			to CENTER_VERTICAL_ALIGNMENT: /*-*/ yUsed = (*monitor).topY + ((*monitor).h - height) / 2; /*-*/ brk;
+			to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ yUsed = (*monitor).bottomY - height; /*-------------------*/ brk;
+			off: /*--------------------------*/ yUsed = y; /*---------------------------------------------*/ brk;
+		end
+		reply = xcb_wait_for_reply(connection, xcb_get_image_unchecked(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, (*screen).root, xUsed + xOffset, yUsed + yOffset - height, width, height, -1), NULL);
+		token = pushPointer(reply, "drawWindow() get image reply", iFree);
+		if(reply){
+
+
+
+			/*! this here blurring section is not ready yet */
+
+
+
+			/*! what if this fails? where do we point then? */
+
+			image.data = xcb_get_image_data(reply);
+
+
+
+#ifdef a
+			twoPassBoxBlur(width, height, (void *)xcb_get_image_data(reply), intermediateData, data, blurSize);
+#endif
+
+
+
+			compositeImages(&compositeImagesAnd, 0, 0, &commonUnderlayImage, 0, 0, &image);
+			free(reply);
+			popPointer(token);
+		}
+	}else{
+
+
+
+		/*! what a mess... */
+
+
+
+		copyImage(&commonUnderlayImage, &image);
+
+
+
+		/*!*/
+
+
+
+	}
+
+
+
+	{
+		Image *destination;
+
+
+
+		/*!
+			the images are in some kind of fight for dominance to show up first.
+		*/
+
+
+
+		if(averageBrightness == oldAverageBrightness){
+			destination = &unchangedBrightnessImage;
+		}elif(averageBrightness > oldAverageBrightness){
+			destination = &increasedBrightnessImage;
+		}else{
+			destination = &decreasedBrightnessImage;
+		}
+		compositeImages(&compositeImagesOver, 0, 0, destination, 0, 0, &image);
+	}
+
+
+
+	/*! how is this requested by the user */
+
+	if(commonOverlayImage.data){
+		const uint largePercentage = (100 - averageBrightness) * commonOverlayImage.height / 100;
+		compositeImages(&compositeImagesOver, 0, largePercentage, &commonOverlayImage, 0, (image.height - commonOverlayImage.height) / 2 + largePercentage, &image);
+	}
+
+
+
+	if(drawable == (*monitor).pixmap or (drawable == (*monitor).window and (*monitor).windowMapped)){
+		xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, drawable, (*monitor).gc, width, height, 0, 0, 0, depth, image.size, (void *)image.data);
+		xcb_flush(connection);
+	}
+	if(image.dataToken){
+		free(image.data);
+		popPointer(image.dataToken);
+	}
+	ret;
 }
 SETSTRINGROOT(){
 	#define DATA_BLOCK_SIZE /*-*/ (256)
@@ -3412,7 +3635,9 @@ READCONFIG(){
 	char quote = '\0';
 	uint currentScopeInstructionListSize = STRING_ARRAY_SIZE(globalInstructionList);
 	StringNodeRoot *const *const *currentScopeInstructionData = globalScopeInstructionData;
-	StringNodeRoot *const *instructionCurrentData;
+	StringNodeRoot *const *instructionDataStart;
+	StringNodeRoot *const *instructionDataStartCopy;
+	StringNodeRoot *const *instructionDataCurrent;
 	StringNodeRoot *currentScopeInstructionRoot = &globalInstructionRoot;
 	bool lockUnlockMutex = true;
 	image0Return.data = NULL;
@@ -3443,7 +3668,7 @@ READCONFIG(){
 				if(dir){
 					closedir(dir);
 					popPointer(token);
-					printConfigError("config error", "config file is directory", '\0', false, false, false, false, configPath, 1, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+					printConfigError("config error", "config file is directory", '\0', false, false, false, false, configPath, 1, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 					jmp configEmergencyExit;
 				}
 			}
@@ -3454,13 +3679,13 @@ READCONFIG(){
 				FILE *defaultConfigFile;
 				uint defaultConfigFileToken;
 				if(!createConfigFile){
-					printConfigError("config error", "could not open config file", '\0', false, false, false, false, configPath, 1, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+					printConfigError("config error", "could not open config file", '\0', false, false, false, false, configPath, 1, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 					jmp configEmergencyExit;
 				}
 				configFile = fopen(configPath, "w");
 				configFileToken = pushPointer(configFile, "config file", fclose);
 				if(!configFile){
-					printConfigError("config error", "could not create config file", '\0', false, false, false, false, configPath, 1, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+					printConfigError("config error", "could not create config file", '\0', false, false, false, false, configPath, 1, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 					jmp configEmergencyExit;
 				}
 				defaultConfigFile = fopen(DEFAULT_CONFIG_PATH, "r");
@@ -3763,7 +3988,7 @@ READCONFIG(){
 			*statementCurrent = '\0';
 			statementLine = fileLine;
 			statementWall = statementCurrent;
-			printConfigError("stray opening bracket error", "could not enter nameless scope", '{', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("stray opening bracket error", "could not enter nameless scope", '{', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		if(*(statementCurrent - 1)){
@@ -3781,18 +4006,18 @@ READCONFIG(){
 		if(currentScopeInstruction == globalScopeInstruction){
 			root = &globalScopesInstructionRoot;
 		}else{
-			printConfigError("invalid scope error", "no scopes inside current scope", '{', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("invalid scope error", "no scopes inside current scope", '{', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		if(!findString(root, &statementCurrent)){
-			printConfigError("invalid scope error", "invalid scope name", '{', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("invalid scope error", "invalid scope name", '{', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		if(itemAmount > 1){
 			/*!
 				missing space between final argument and scope imminent
 			*/
-			printConfigError("scope argument error", "too many arguments", '{', true, true, true, false, configPath, statementLine, statementStart, statementWall, (void *)1, (void *)1, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("scope argument error", "too many arguments", '{', true, true, true, false, configPath, statementLine, statementStart, statementWall, (void *)1, (void *)1, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		currentScopeInstruction = scope1ScopeInstruction;
@@ -3829,7 +4054,7 @@ READCONFIG(){
 			*statementCurrent = '\0';
 			statementLine = fileLine;
 			statementWall = statementCurrent;
-			printConfigError("stray closing bracket error", "could not drop to previous config scope", '}', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("stray closing bracket error", "could not drop to previous config scope", '}', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		if(currentScopeInstruction == scope1ScopeInstruction){
@@ -3876,7 +4101,7 @@ READCONFIG(){
 			temp = realloc(statementStart, statementSize * sizeof(char));
 			updatePointer(statementToken, temp);
 			if(!temp){
-				printConfigError("memory allocation error", "could not reallocate memory for config statement", ';', true, false, false, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+				printConfigError("memory allocation error", "could not reallocate memory for config statement", ';', true, false, false, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 				statementSize -= STATEMENT_BLOCK_SIZE;
 				jmp getStatementStart;
 			}
@@ -3949,21 +4174,23 @@ READCONFIG(){
 		statementWall = statementCurrent - 1;
 		statementCurrent = statementStart;
 		if(!findString(currentScopeInstructionRoot, &statementCurrent)){
-			printConfigError("config error", "unrecognized instruction", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("config error", "unrecognized instruction", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp printAllInstructionPatterns;
 		}
 		instructionStart = *(currentScopeInstruction + (*currentScopeInstructionRoot).returnedCounter);
 		instructionStartCopy = instructionStart;
 		instructionCurrent = instructionStart;
+		instructionDataStart = *(currentScopeInstructionData + (*currentScopeInstructionRoot).returnedCounter);
+		instructionDataStartCopy = instructionDataStart;
+		instructionDataCurrent = instructionDataStart;
 		if(*instructionCurrent == NONE_INSTRUCTION){
 			jmp unimplementedInstruction;
 		}
 		if(statementCurrent >= statementWall and *instructionCurrent != END_INSTRUCTION){
-			printConfigError("config error", "missing instruction body", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("config error", "missing instruction body", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		inc statementCurrent;
-		instructionCurrentData = *(currentScopeInstructionData + (*currentScopeInstructionRoot).returnedCounter);
 		jmp switchInstructionLoop;
 	}
 	switchInstructionLoop: switch *instructionCurrent over
@@ -3977,7 +4204,7 @@ READCONFIG(){
 		off: /*----------------------*/ jmp endOfInstruction;
 	end
 	unimplementedInstruction:{
-		printConfigError("implementation error", "using unimplemented instruction", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("implementation error", "using unimplemented instruction", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	matchName:{
@@ -4003,13 +4230,13 @@ READCONFIG(){
 			name4Instruction = instructionCurrent;
 		}
 		s = statementCurrent;
-		if(!findString(*instructionCurrentData, &s)){
-			printConfigError("match string error", "invalid name", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		if(!findString(*instructionDataCurrent, &s)){
+			printConfigError("match string error", "invalid name", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		statementCurrent = s;
 		inc statementCurrent;
-		*namePointer = (**instructionCurrentData).returnedCounter;
+		*namePointer = (**instructionDataCurrent).returnedCounter;
 		jmp advanceDataInstruction;
 	}
 	matchNameList:{
@@ -4033,18 +4260,18 @@ READCONFIG(){
 			nameListPointer = &nameList4Return;
 			nameList4Instruction = instructionCurrent;
 		}
-		switch matchNameList(*instructionCurrentData, statementWall, &statementCurrent, nameListPointer) over
+		switch matchNameList(*instructionDataCurrent, statementWall, &statementCurrent, nameListPointer) over
 			to INVALID_NAME_NAME_LIST: /*--*/ jmp invalidNameNameList;
 			to PREMATURE_END_NAME_LIST: /*-*/ jmp prematureEndNameList;
 			off: /*------------------------*/ jmp advanceDataInstruction;
 		end
 	}
 	invalidNameNameList:{
-		printConfigError("bar list error", "invalid name", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("bar list error", "invalid name", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	prematureEndNameList:{
-		printConfigError("bar list error", "missing final name", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("bar list error", "missing final name", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	matchInteger:{
@@ -4076,15 +4303,15 @@ READCONFIG(){
 		end
 	}
 	printNonNumberError:{
-		printConfigError("match integer error", "not a number", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match integer error", "not a number", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printOverflownNumberError:{
-		printConfigError("match integer error", "integer overflow", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match integer error", "integer overflow", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printDividedByZeroNumberError:{
-		printConfigError("match integer error", "integer divided by zero", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match integer error", "integer divided by zero", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	matchString:{
@@ -4115,7 +4342,7 @@ READCONFIG(){
 			string4Instruction = instructionCurrent;
 		}
 		if(!matchString(&statementCurrent, stringPointer, stringTokenPointer)){
-			printConfigError("match string error", "could not allocate string data", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("match string error", "could not allocate string data", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		jmp advanceInstruction;
@@ -4148,7 +4375,7 @@ READCONFIG(){
 			execute4Instruction = instructionCurrent;
 		}
 		if(!matchExecute(&statementCurrent, executePointer, executeTokenPointer)){
-			printConfigError("match execute error", "could not allocate execute string data", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("match execute error", "could not allocate execute string data", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		jmp advanceInstruction;
@@ -4178,7 +4405,7 @@ READCONFIG(){
 			image4Instruction = instructionCurrent;
 		}
 		if(!matchString(&statementCurrent, &string, &token)){
-			printConfigError("match image error", "could not allocate image string data", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("match image error", "could not allocate image string data", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		readImageReturn = readImage(string, &imageErrorMessage, &image0Return);
@@ -4200,127 +4427,100 @@ READCONFIG(){
 		end
 	}
 	printCannotOpenReadConfig:{
-		printConfigError("match image error", "could not open image file", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", "could not open image file", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printCannotReadReadConfig:{
-		printConfigError("match image error", "could not read image file", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", "could not read image file", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printUnsupportedFormatReadConfig:{
-		printConfigError("match image error", "image file not bmp", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", "image file not bmp", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printBadHeaderReadConfig:{
-		printConfigError("match image error", imageErrorMessage, ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", imageErrorMessage, ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printBadDepthReadConfig:{
-		printConfigError("match image error", imageErrorMessage, ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", imageErrorMessage, ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printBadCompressionReadConfig:{
-		printConfigError("match image error", imageErrorMessage, ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", imageErrorMessage, ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printUnsupportedHeightReadConfig:{
-		printConfigError("match image error", "negative height is not supported", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", "negative height is not supported", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printBadSizeReadConfig:{
-		printConfigError("match image error", "could not traverse image past the header", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", "could not traverse image past the header", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printFailedReadConfig:{
-		printConfigError("match image error", "could not allocate pixels", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", "could not allocate pixels", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printBadPixelsReadConfig:{
-		printConfigError("match image error", "could not read pixels", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", "could not read pixels", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printBadImageReadConfig:{
-		printConfigError("match image error", "image is broken", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("match image error", "image is broken", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	endOfInstruction:{
-		if(instructionStart == setInstruction){
-			const uint offset = instructionCurrent - instructionStart;
+		if(instructionStart == doInstruction){
 			switch name0Return over
-				to X_VARIABLE: /*--------------------------*/ instructionStart = xSetSubInstruction; /*------------------------*/ brk;
-				to Y_VARIABLE: /*--------------------------*/ instructionStart = ySetSubInstruction; /*------------------------*/ brk;
-				to X_OFFSET_VARIABLE: /*-------------------*/ instructionStart = xOffsetSetSubInstruction; /*------------------*/ brk;
-				to Y_OFFSET_VARIABLE: /*-------------------*/ instructionStart = yOffsetSetSubInstruction; /*------------------*/ brk;
-				to HORIZONTAL_ALIGNMENT_VARIABLE: /*-------*/ instructionStart = horizontalAlignmentSetSubInstruction; /*------*/ brk;
-				to VERTICAL_ALIGNMENT_VARIABLE: /*---------*/ instructionStart = verticalAlignmentSetSubInstruction; /*--------*/ brk;
-				to WIDTH_VARIABLE: /*----------------------*/ instructionStart = widthSetSubInstruction; /*--------------------*/ brk;
-				to HEIGHT_VARIABLE: /*---------------------*/ instructionStart = heightSetSubInstruction; /*-------------------*/ brk;
-				to WHICH_MONITOR_UPDATES_VARIABLE: /*------*/ instructionStart = whichMonitorUpdatesSetSubInstruction; /*------*/ brk;
-				to WHICH_MONITOR_SHOWS_VARIABLE: /*--------*/ instructionStart = whichMonitorShowsSetSubInstruction; /*--------*/ brk;
-				to FOREGROUND_COLOR_VARIABLE: /*-----------*/ instructionStart = foregroundColorSetSubInstruction; /*----------*/ brk;
-				to BACKGROUND_COLOR_VARIABLE: /*-----------*/ instructionStart = backgroundColorSetSubInstruction; /*----------*/ brk;
-				to UNCHANGED_BRIGHTNESS_IMAGE_VARIABLE: /*-*/ instructionStart = unchangedBrightnessImageSetSubInstruction; /*-*/ brk;
-				to INCREASED_BRIGHTNESS_IMAGE_VARIABLE: /*-*/ instructionStart = increasedBrightnessImageSetSubInstruction; /*-*/ brk;
-				to DECREASED_BRIGHTNESS_IMAGE_VARIABLE: /*-*/ instructionStart = decreasedBrightnessImageSetSubInstruction; /*-*/ brk;
-				to COMMON_OVERLAY_IMAGE_VARIABLE: /*-------*/ instructionStart = commonOverlayImageSetSubInstruction; /*-------*/ brk;
-				to COMMON_UNDERLAY_IMAGE_VARIABLE: /*------*/ instructionStart = commonUnderlayImageSetSubInstruction; /*------*/ brk;
-				to BLUR_SIZE_VARIABLE: /*------------------*/ instructionStart = blurSizeSetSubInstruction; /*-----------------*/ brk;
-				to DURATION_VARIABLE: /*-------------------*/ instructionStart = durationSetSubInstruction; /*-----------------*/ brk;
-				off: /*------------------------------------*/ /*---------------------------------------------------------------*/ jmp noneVariableSubInstruction;
-			end
-			instructionCurrent = instructionStart + offset;
-			if(statementCurrent < statementWall){
-				jmp switchInstructionLoop;
+				to EXECUTE_COMMAND: /*---------*/ instructionStart = executeDoSubinstruction; /*--------*/ instructionDataStart = executeDoSubinstructionData; /*--------*/ jmp assessSubinstruction;
+				to BRIGHTNESS_UP_COMMAND: /*---*/ instructionStart = brightnessUpDoSubinstruction; /*---*/ instructionDataStart = brightnessUpDoSubinstructionData; /*---*/ jmp assessSubinstruction;
+				to BRIGHTNESS_DOWN_COMMAND: /*-*/ instructionStart = brightnessDownDoSubinstruction; /*-*/ instructionDataStart = brightnessDownDoSubinstructionData; /*-*/ jmp assessSubinstruction;
+				off: /*------------------------*/ /*----------------------------------------------------*/ /*------------------------------------------------------------*/ brk;
 			}
-			jmp printMissingArgumentError;
-			noneVariableSubInstruction:{}
 		}
-		if(instructionStart == grabKeycodeInstruction or instructionStart == grabButtonInstruction){
-			const uint offset = instructionCurrent - instructionStart;
+		if(instructionStart == setInstruction){
 			switch name0Return over
-				to EXECUTE_COMMAND:{
-					if(instructionStart == grabKeycodeInstruction){
-						instructionStart = executeGrabKeycodeSubInstruction;
-					}else{
-						instructionStart = executeGrabButtonSubInstruction;
-					}
-					instructionCurrent = instructionStart + offset;
-					if(statementCurrent < statementWall){
-						jmp switchInstructionLoop;
-					}
-					jmp printMissingArgumentError;
-				}
-				to BRIGHTNESS_UP_COMMAND:{
-					if(instructionStart == grabKeycodeInstruction){
-						instructionStart = brightnessUpGrabKeycodeSubInstruction;
-					}else{
-						instructionStart = brightnessUpGrabButtonSubInstruction;
-					}
-					instructionCurrent = instructionStart + offset;
-					if(statementCurrent < statementWall){
-						jmp switchInstructionLoop;
-					}
-					jmp printMissingArgumentError;
-				}
-				to BRIGHTNESS_DOWN_COMMAND:{
-					if(instructionStart == grabKeycodeInstruction){
-						instructionStart = brightnessDownGrabKeycodeSubInstruction;
-					}else{
-						instructionStart = brightnessDownGrabButtonSubInstruction;
-					}
-					instructionCurrent = instructionStart + offset;
-					if(statementCurrent < statementWall){
-						jmp switchInstructionLoop;
-					}
-					jmp printMissingArgumentError;
-				}
-				off:{
-					brk;
-				}
+				to X_VARIABLE: /*--------------------------*/ instructionStart = xSetSubinstruction; /*------------------------*/ instructionDataStart = xSetSubinstructionData; /*------------------------*/ jmp assessSubinstruction;
+				to Y_VARIABLE: /*--------------------------*/ instructionStart = ySetSubinstruction; /*------------------------*/ instructionDataStart = ySetSubinstructionData; /*------------------------*/ jmp assessSubinstruction;
+				to X_OFFSET_VARIABLE: /*-------------------*/ instructionStart = xOffsetSetSubinstruction; /*------------------*/ instructionDataStart = xOffsetSetSubinstructionData; /*------------------*/ jmp assessSubinstruction;
+				to Y_OFFSET_VARIABLE: /*-------------------*/ instructionStart = yOffsetSetSubinstruction; /*------------------*/ instructionDataStart = yOffsetSetSubinstructionData; /*------------------*/ jmp assessSubinstruction;
+				to HORIZONTAL_ALIGNMENT_VARIABLE: /*-------*/ instructionStart = horizontalAlignmentSetSubinstruction; /*------*/ instructionDataStart = horizontalAlignmentSetSubinstructionData; /*------*/ jmp assessSubinstruction;
+				to VERTICAL_ALIGNMENT_VARIABLE: /*---------*/ instructionStart = verticalAlignmentSetSubinstruction; /*--------*/ instructionDataStart = verticalAlignmentSetSubinstructionData; /*--------*/ jmp assessSubinstruction;
+				to WIDTH_VARIABLE: /*----------------------*/ instructionStart = widthSetSubinstruction; /*--------------------*/ instructionDataStart = widthSetSubinstructionData; /*--------------------*/ jmp assessSubinstruction;
+				to HEIGHT_VARIABLE: /*---------------------*/ instructionStart = heightSetSubinstruction; /*-------------------*/ instructionDataStart = heightSetSubinstructionData; /*-------------------*/ jmp assessSubinstruction;
+				to WHICH_MONITOR_UPDATES_VARIABLE: /*------*/ instructionStart = whichMonitorUpdatesSetSubinstruction; /*------*/ instructionDataStart = whichMonitorUpdatesSetSubinstructionData; /*------*/ jmp assessSubinstruction;
+				to WHICH_MONITOR_SHOWS_VARIABLE: /*--------*/ instructionStart = whichMonitorShowsSetSubinstruction; /*--------*/ instructionDataStart = whichMonitorShowsSetSubinstructionData; /*--------*/ jmp assessSubinstruction;
+				to FOREGROUND_COLOR_VARIABLE: /*-----------*/ instructionStart = foregroundColorSetSubinstruction; /*----------*/ instructionDataStart = foregroundColorSetSubinstructionData; /*----------*/ jmp assessSubinstruction;
+				to BACKGROUND_COLOR_VARIABLE: /*-----------*/ instructionStart = backgroundColorSetSubinstruction; /*----------*/ instructionDataStart = backgroundColorSetSubinstructionData; /*----------*/ jmp assessSubinstruction;
+				to UNCHANGED_BRIGHTNESS_IMAGE_VARIABLE: /*-*/ instructionStart = unchangedBrightnessImageSetSubinstruction; /*-*/ instructionDataStart = unchangedBrightnessImageSetSubinstructionData; /*-*/ jmp assessSubinstruction;
+				to INCREASED_BRIGHTNESS_IMAGE_VARIABLE: /*-*/ instructionStart = increasedBrightnessImageSetSubinstruction; /*-*/ instructionDataStart = increasedBrightnessImageSetSubinstructionData; /*-*/ jmp assessSubinstruction;
+				to DECREASED_BRIGHTNESS_IMAGE_VARIABLE: /*-*/ instructionStart = decreasedBrightnessImageSetSubinstruction; /*-*/ instructionDataStart = decreasedBrightnessImageSetSubinstructionData; /*-*/ jmp assessSubinstruction;
+				to COMMON_OVERLAY_IMAGE_VARIABLE: /*-------*/ instructionStart = commonOverlayImageSetSubinstruction; /*-------*/ instructionDataStart = commonOverlayImageSetSubinstructionData; /*-------*/ jmp assessSubinstruction;
+				to COMMON_UNDERLAY_IMAGE_VARIABLE: /*------*/ instructionStart = commonUnderlayImageSetSubinstruction; /*------*/ instructionDataStart = commonUnderlayImageSetSubinstructionData; /*------*/ jmp assessSubinstruction;
+				to BLUR_SIZE_VARIABLE: /*------------------*/ instructionStart = blurSizeSetSubinstruction; /*-----------------*/ instructionDataStart = blurSizeSetSubinstructionData; /*-----------------*/ jmp assessSubinstruction;
+				to DURATION_VARIABLE: /*-------------------*/ instructionStart = durationSetSubinstruction; /*-----------------*/ instructionDataStart = durationSetSubinstructionData; /*-----------------*/ jmp assessSubinstruction;
+				off: /*------------------------------------*/ /*---------------------------------------------------------------*/ /*-----------------------------------------------------------------------*/ brk;
+			end
+		}
+		if(instructionStart == grabKeycodeInstruction){
+			switch name0Return over
+				to EXECUTE_COMMAND: /*---------*/ instructionStart = executeGrabKeycodeSubinstruction; /*--------*/ instructionDataStart = executeGrabKeycodeSubinstructionData; /*--------*/ jmp assessSubinstruction;
+				to BRIGHTNESS_UP_COMMAND: /*---*/ instructionStart = brightnessUpGrabKeycodeSubinstruction; /*---*/ instructionDataStart = brightnessUpGrabKeycodeSubinstructionData; /*---*/ jmp assessSubinstruction;
+				to BRIGHTNESS_DOWN_COMMAND: /*-*/ instructionStart = brightnessDownGrabKeycodeSubinstruction; /*-*/ instructionDataStart = brightnessDownGrabKeycodeSubinstructionData; /*-*/ jmp assessSubinstruction;
+				off: /*------------------------*/ /*-------------------------------------------------------------*/ /*---------------------------------------------------------------------*/ brk;
+			}
+		}
+		if(instructionStart == grabButtonInstruction){
+			switch name0Return over
+				to EXECUTE_COMMAND: /*---------*/ instructionStart = executeGrabButtonSubinstruction; /*--------*/ instructionDataStart = executeGrabButtonSubinstructionData; /*--------*/ jmp assessSubinstruction;
+				to BRIGHTNESS_UP_COMMAND: /*---*/ instructionStart = brightnessUpGrabButtonSubinstruction; /*---*/ instructionDataStart = brightnessUpGrabButtonSubinstructionData; /*---*/ jmp assessSubinstruction;
+				to BRIGHTNESS_DOWN_COMMAND: /*-*/ instructionStart = brightnessDownGrabButtonSubinstruction; /*-*/ instructionDataStart = brightnessDownGrabButtonSubinstructionData; /*-*/ jmp assessSubinstruction;
+				off: /*------------------------*/ /*------------------------------------------------------------*/ /*--------------------------------------------------------------------*/ brk;
 			}
 		}
 		if(statementCurrent < statementWall){
-			printConfigError("config error", "extra parameters error", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("config error", "extra parameters error", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 			jmp getStatementStart;
 		}
 		if(instructionStartCopy == helpInstruction){
@@ -4335,9 +4535,27 @@ READCONFIG(){
 			displaySimpleConfigErrors = true;
 			jmp getStatementStart;
 		}
-		if(instructionStartCopy == executeInstruction){
-			exec(execute0Return);
-			jmp getStatementStart;
+		if(instructionStartCopy == doInstruction){
+			switch name0Return over
+				to EXECUTE_COMMAND:{
+					exec(execute0Return);
+					jmp getStatementStart;
+				}
+				to BRIGHTNESS_UP_COMMAND:{
+					jmp printDoSubinstructionNotImplemented;
+				}
+				to BRIGHTNESS_DOWN_COMMAND:{
+					jmp printDoSubinstructionNotImplemented;
+				}
+				off:{
+					jmp getStatementStart;
+				}
+			end
+			printDoSubinstructionNotImplemented:{
+				printConfigError("config error", "do subinstruction not implemented yet", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionStart, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
+				jmp getStatementStart;
+				jmp printDoSubinstructionNotImplemented;
+			}
 		}
 		if(instructionStartCopy == setInstruction){
 
@@ -4374,7 +4592,7 @@ READCONFIG(){
 				}
 				to WIDTH_VARIABLE:{
 					if(integer0Return < 0){
-						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
 					width = integer0Return;
@@ -4382,7 +4600,7 @@ READCONFIG(){
 				}
 				to HEIGHT_VARIABLE:{
 					if(integer0Return < 0){
-						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
 					height = integer0Return;
@@ -4436,11 +4654,11 @@ READCONFIG(){
 				}
 				to BLUR_SIZE_VARIABLE:{
 					if(integer0Return < 0){
-						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
 					if(integer0Return % 2 != 1){
-						printConfigError("integer domain error", "integer is not even", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+						printConfigError("integer domain error", "integer is not even", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
 					blurSize = integer0Return;
@@ -4448,7 +4666,7 @@ READCONFIG(){
 				}
 				to DURATION_VARIABLE:{
 					if(integer0Return < 0){
-						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
 					seconds = integer0Return / 1000;
@@ -4460,92 +4678,46 @@ READCONFIG(){
 				}
 			end
 		}
-		if(instructionStartCopy == overlayInstruction){
+		if(instructionStartCopy == copyImageInstruction){
+			Image *source;
+			Image *destination;
 			switch name0Return over
-				to UNCHANGED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE:{
-					if(!unchangedBrightnessImage.data){
-						unchangedBrightnessImage = image0Return;
-						image0Return.data = NULL;
-						image0Return.dataToken = 0;
-						jmp getStatementStart;
-					}
-
-
-
-					/*!*/
-
-
-
-					jmp getStatementStart;
-				}
-				to INCREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE:{
-					if(!increasedBrightnessImage.data){
-						increasedBrightnessImage = image0Return;
-						image0Return.data = NULL;
-						image0Return.dataToken = 0;
-						jmp getStatementStart;
-					}
-
-
-
-					/*!*/
-
-
-
-					jmp getStatementStart;
-				}
-				to DECREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE:{
-					if(!decreasedBrightnessImage.data){
-						decreasedBrightnessImage = image0Return;
-						image0Return.data = NULL;
-						image0Return.dataToken = 0;
-						jmp getStatementStart;
-					}
-
-
-
-					/*!*/
-
-
-
-					jmp getStatementStart;
-				}
-				to COMMON_OVERLAY_IMAGE_IMAGE_VARIABLE:{
-					if(!commonOverlayImage.data){
-						commonOverlayImage = image0Return;
-						image0Return.data = NULL;
-						image0Return.dataToken = 0;
-						jmp getStatementStart;
-					}
-
-
-
-					/*!*/
-
-
-
-					jmp getStatementStart;
-				}
-				to COMMON_UNDERLAY_IMAGE_IMAGE_VARIABLE:{
-					if(!commonUnderlayImage.data){
-						commonUnderlayImage = image0Return;
-						image0Return.data = NULL;
-						image0Return.dataToken = 0;
-						jmp getStatementStart;
-					}
-
-
-
-					/*!*/
-
-
-
-					jmp getStatementStart;
-				}
-				off:{
-					jmp getStatementStart;
-				}
+				to UNCHANGED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE: /*-*/ source = &unchangedBrightnessImage; /*-*/ brk;
+				to INCREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE: /*-*/ source = &increasedBrightnessImage; /*-*/ brk;
+				to DECREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE: /*-*/ source = &decreasedBrightnessImage; /*-*/ brk;
+				to COMMON_OVERLAY_IMAGE_IMAGE_VARIABLE: /*-------*/ source = &commonOverlayImage; /*-------*/ brk;
+				to COMMON_UNDERLAY_IMAGE_IMAGE_VARIABLE: /*------*/ source = &commonUnderlayImage; /*------*/ brk;
+				off: /*------------------------------------------*/ /*-------------------------------------*/ jmp getStatementStart;
 			end
+			switch name1Return over
+				to UNCHANGED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE: /*-*/ destination = &unchangedBrightnessImage; /*-*/ brk;
+				to INCREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE: /*-*/ destination = &increasedBrightnessImage; /*-*/ brk;
+				to DECREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE: /*-*/ destination = &decreasedBrightnessImage; /*-*/ brk;
+				to COMMON_OVERLAY_IMAGE_IMAGE_VARIABLE: /*-------*/ destination = &commonOverlayImage; /*-------*/ brk;
+				to COMMON_UNDERLAY_IMAGE_IMAGE_VARIABLE: /*------*/ destination = &commonUnderlayImage; /*------*/ brk;
+				off: /*------------------------------------------*/ /*------------------------------------------*/ jmp getStatementStart;
+			end
+			copyImage(source, destination);
+			jmp getStatementStart;
+		}
+		if(instructionStartCopy == compositeImagesInstruction){
+			void (*operation)(const uint32 *const, uint32 *const);
+			Image *destination;
+			switch name0Return over
+				to OVER_COMPOSITE_IMAGES_OPERATION: /*-*/ operation = &compositeImagesOver; /*-*/ brk;
+				to AND_COMPOSITE_IMAGES_OPERATION: /*--*/ operation = &compositeImagesAnd; /*--*/ brk;
+				off: /*--------------------------------*/ /*-----------------------------------*/ jmp getStatementStart;
+			end
+			switch name1Return over
+				to UNCHANGED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE: /*-*/ destination = &unchangedBrightnessImage; /*-*/ brk;
+				to INCREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE: /*-*/ destination = &increasedBrightnessImage; /*-*/ brk;
+				to DECREASED_BRIGHTNESS_IMAGE_IMAGE_VARIABLE: /*-*/ destination = &decreasedBrightnessImage; /*-*/ brk;
+				to COMMON_OVERLAY_IMAGE_IMAGE_VARIABLE: /*-------*/ destination = &commonOverlayImage; /*-------*/ brk;
+				to COMMON_UNDERLAY_IMAGE_IMAGE_VARIABLE: /*------*/ destination = &commonUnderlayImage; /*------*/ brk;
+				off: /*------------------------------------------*/ /*------------------------------------------*/ jmp getStatementStart;
+			end
+			compositeImages(operation, integer0Return, integer1Return, &image0Return, integer2Return, integer3Return, destination);
+			jmp getStatementStart;
 		}
 		if(instructionStartCopy == grabKeycodeInstruction){
 			uint8 field0 = 0;
@@ -4553,15 +4725,15 @@ READCONFIG(){
 			uint8 field2 = 0;
 			uint8 field3 = 0;
 			uint8 field4 = 0;
-			if(instructionStart == brightnessUpGrabKeycodeSubInstruction or instructionStart == brightnessDownGrabKeycodeSubInstruction){
+			if(instructionStart == brightnessUpGrabKeycodeSubinstruction or instructionStart == brightnessDownGrabKeycodeSubinstruction){
 				if(integer1Return < 0){
-					printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+					printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 					jmp getStatementStart;
 				}
 				field0 = integer1Return;
 			}
 			if(!insertShortcut(&keycodeShortcut, integer0Return, nameList0Return, name0Return, execute0Return, execute0Token, field0, field1, field2, field3, field4)){
-				printConfigError("shortcut error", "could not insert shortcut", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+				printConfigError("shortcut error", "could not insert shortcut", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 				jmp getStatementStart;
 			}
 			execute0Return = NULL;
@@ -4573,7 +4745,7 @@ READCONFIG(){
 				xcb_generic_error_t *const error = xcb_request_check(connection, cookie);
 				uint token = pushPointer(error, "grab key check pointer", iFree);
 				if(error){
-					printConfigError("shortcut error", "could not grab key on root", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+					printConfigError("shortcut error", "could not grab key on root", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 					free(error);
 					popPointer(token);
 				}
@@ -4590,7 +4762,7 @@ READCONFIG(){
 					xcb_generic_error_t *const error = xcb_request_check(connection, cookie);
 					uint token = pushPointer(error, "grab key check pointer", iFree);
 					if(error){
-						printConfigError("shortcut error", "could not grab key on window", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+						printConfigError("shortcut error", "could not grab key on window", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						free(error);
 						popPointer(token);
 					}
@@ -4609,11 +4781,11 @@ READCONFIG(){
 			uint8 field2 = 0;
 			uint8 field3 = 0;
 			uint8 field4 = 0;
-			if(instructionStart == brightnessUpGrabButtonSubInstruction or instructionStart == brightnessDownGrabButtonSubInstruction){
+			if(instructionStart == brightnessUpGrabButtonSubinstruction or instructionStart == brightnessDownGrabButtonSubinstruction){
 				field0 = integer1Return;
 			}
 			if(!insertShortcut(&buttonShortcut, integer0Return, nameList0Return, name0Return, execute0Return, execute0Token, field0, field1, field2, field3, field4)){
-				printConfigError("shortcut error", "could not insert shortcut", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+				printConfigError("shortcut error", "could not insert shortcut", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 				jmp getStatementStart;
 			}
 			execute0Return = NULL;
@@ -4625,7 +4797,7 @@ READCONFIG(){
 				xcb_generic_error_t *const error = xcb_request_check(connection, cookie);
 				uint token = pushPointer(error, "grab button check pointer", iFree);
 				if(error){
-					printConfigError("shortcut error", "could not grab button on root", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+					printConfigError("shortcut error", "could not grab button on root", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 					free(error);
 					popPointer(token);
 				}
@@ -4642,7 +4814,7 @@ READCONFIG(){
 					xcb_generic_error_t *const error = xcb_request_check(connection, cookie);
 					uint token = pushPointer(error, "grab button check pointer", iFree);
 					if(error){
-						printConfigError("shortcut error", "could not grab button on window", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+						printConfigError("shortcut error", "could not grab button on window", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						free(error);
 						popPointer(token);
 					}
@@ -4657,7 +4829,7 @@ READCONFIG(){
 		}
 		if(instructionStartCopy == ungrabKeycodeInstruction){
 			if(!removeShortcut(&keycodeShortcut, integer0Return, nameList0Return)){
-				printConfigError("shortcut error", "could not find key to ungrab", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+				printConfigError("shortcut error", "could not find key to ungrab", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 				jmp getStatementStart;
 			}
 			if(name0Return <= lastGlobalCommand){
@@ -4667,7 +4839,7 @@ READCONFIG(){
 				xcb_generic_error_t *const error = xcb_request_check(connection, cookie);
 				uint token = pushPointer(error, "ungrab key check pointer", iFree);
 				if(error){
-					printConfigError("shortcut error", "could not ungrab key from root", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+					printConfigError("shortcut error", "could not ungrab key from root", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 					free(error);
 					popPointer(token);
 				}
@@ -4684,7 +4856,7 @@ READCONFIG(){
 					xcb_generic_error_t *const error = xcb_request_check(connection, cookie);
 					uint token = pushPointer(error, "ungrab key check pointer", iFree);
 					if(error){
-						printConfigError("shortcut error", "could not ungrab key from window", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+						printConfigError("shortcut error", "could not ungrab key from window", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						free(error);
 						popPointer(token);
 					}
@@ -4699,7 +4871,7 @@ READCONFIG(){
 		}
 		if(instructionStartCopy == ungrabButtonInstruction){
 			if(!removeShortcut(&buttonShortcut, integer0Return, nameList0Return)){
-				printConfigError("shortcut error", "could not find button to ungrab", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+				printConfigError("shortcut error", "could not find button to ungrab", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 				jmp getStatementStart;
 			}
 			if(name0Return <= lastGlobalCommand){
@@ -4709,7 +4881,7 @@ READCONFIG(){
 				xcb_generic_error_t *const error = xcb_request_check(connection, cookie);
 				uint token = pushPointer(error, "ungrab button check pointer", iFree);
 				if(error){
-					printConfigError("shortcut error", "could not ungrab button from root", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+					printConfigError("shortcut error", "could not ungrab button from root", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 					free(error);
 					popPointer(token);
 				}
@@ -4726,7 +4898,7 @@ READCONFIG(){
 					xcb_generic_error_t *const error = xcb_request_check(connection, cookie);
 					uint token = pushPointer(error, "ungrab button check pointer", iFree);
 					if(error){
-						printConfigError("shortcut error", "could not ungrab button from window", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+						printConfigError("shortcut error", "could not ungrab button from window", ';', true, true, false, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						free(error);
 						popPointer(token);
 					}
@@ -4754,11 +4926,19 @@ READCONFIG(){
 	}
 	advanceDataInstruction:{
 		inc instructionCurrent;
-		inc instructionCurrentData;
+		inc instructionDataCurrent;
 		jmp switchInstructionLoop;
 	}
+	assessSubinstruction:{
+		instructionCurrent = instructionStart + (instructionCurrent - instructionStartCopy);
+		instructionDataCurrent = instructionDataStart + (instructionDataCurrent - instructionDataStartCopy);
+		if(statementCurrent < statementWall){
+			jmp switchInstructionLoop;
+		}
+		jmp printMissingArgumentError;
+	}
 	printMissingArgumentError:{
-		printConfigError("config error", "missing argument error", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+		printConfigError("config error", "missing argument error", ';', true, true, true, true, configPath, statementLine, statementStart, statementWall, instructionStart, instructionCurrent, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 		jmp getStatementStart;
 	}
 	printAllInstructionPatterns:{
@@ -4766,6 +4946,7 @@ READCONFIG(){
 		const char *const *current = currentScopeInstructionList;
 		const Instruction *const *in = currentScopeInstruction;
 		StringNodeRoot *const *const *da = currentScopeInstructionData;
+		jmp printExpandedHelpInstructions;
 		printExpandedHelpInstructions:{
 			const Instruction *n = *in - 1;
 			StringNodeRoot *const *d = *da;
@@ -4778,7 +4959,7 @@ READCONFIG(){
 				to NUMBER_INSTRUCTION: /*----*/ jmp numberInstruction;
 				to STRING_INSTRUCTION: /*----*/ jmp stringInstruction;
 				to EXECUTE_INSTRUCTION: /*---*/ jmp executeInstruction;
-				/*! IMAGE_INSTRUCTION: */
+				to IMAGE_INSTRUCTION: /*-----*/ jmp imageInstruction;
 				off: /*----------------------*/ jmp printHelpInstructionParametersLoopExit;
 			end
 			noneInstruction:{
@@ -4859,6 +5040,14 @@ READCONFIG(){
 				printError(" ([\"].*[\"]|[\'].*[\'])");
 				jmp printHelpInstructionParametersLoop;
 			}
+			imageInstruction:{
+				if(displaySimpleConfigErrors){
+					printError(" image");
+					jmp printHelpInstructionParametersLoop;
+				}
+				printError(" ([\"].*[\"]|[\'].*[\'])");
+				jmp printHelpInstructionParametersLoop;
+			}
 		}
 		printHelpInstructionParametersLoopExit:{
 			inc in;
@@ -4883,13 +5072,13 @@ READCONFIG(){
 			if(fileLine != 1){
 				dec statementLine;
 			}
-			printConfigError("config error", "missing closing scope bracket", '\0', true, false, false, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("config error", "missing closing scope bracket", '\0', true, false, false, false, configPath, statementLine, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 		}
 		jmp configEmergencyExit;
 	}
 	configEmergencyExit:{
 		if(configFile and fileLine == 1 and !statementLine){
-			printConfigError("config error", "empty config file", '\0', false, false, false, false, configPath, 1, statementStart, statementWall, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot, currentScopeInstructionData);
+			printConfigError("config error", "empty config file", '\0', false, false, false, false, configPath, 1, statementStart, statementWall, NULL, NULL, NULL, currentScopeInstructionList, currentScopeInstructionRoot);
 		}
 		free(statementStart);
 		popPointer(statementToken);
@@ -5670,8 +5859,10 @@ READIMAGE(){
 	failedImage:{
 		free(data);
 		popPointer(dataToken);
-		fclose(file);
-		popPointer(fileToken);
+		if(file){
+			fclose(file);
+			popPointer(fileToken);
+		}
 		ret returnValue;
 	}
 	#undef  BI_CMYKRLE4
@@ -5760,6 +5951,29 @@ GETPOINTERMONITOR(){
 	}
 	ret monitorStart;
 }
+COPYIMAGE(){
+	void *dataStart = malloc((*source).size * sizeof(uint8));
+	uint dataToken = pushPointer(dataStart, "copyImage() image data pointer", iFree);
+	if(!dataStart){
+		printTitledError("memory allocation error", "could not allocate memory for new image");
+		ret;
+	}
+	free((*destination).data);
+	popPointer((*destination).dataToken);
+
+
+
+	(*destination).data = dataStart;
+	(*destination).dataToken = dataToken;
+	(*destination).size = (*source).size;
+	(*destination).width = (*source).width;
+	(*destination).height = (*source).height;
+	memoryCopy((*source).data, (*destination).data, (*destination).size);
+
+
+
+	ret;
+}
 COMPOSITEIMAGES(){
 	const int sourceIntersectionWidth = (*source).width - sourceX;
 	const int sourceIntersectionHeight = (*source).height - sourceY;
@@ -5837,31 +6051,54 @@ COMPOSITEIMAGESAND(){
 	ret;
 }
 FREEMONITORS(){
+
+
+
+	/*! is it necessary to set default values to the pointers here? */
+
+
+
 	Monitor *current = monitorStart;
 	Monitor *const wall = current + monitorAllocated;
 	jmp freeMonitorCRTCLoop;
 	freeMonitorCRTCLoop:{
 		if(current < wall){
-
-
-
-/*!
-			uint ii;
-			for(ii = 0; ii < (*(monitorStart + i)).crtcAllocated; inc ii){
-				free((*((*(monitorStart + i)).crtcStart + ii)).data);
+			Crtc *crtcCurrent = (*current).crtcStart;
+			Crtc *const crtcWall = crtcCurrent + (*current).crtcAllocated;
+			jmp freeThreadObjects;
+			freeThreadObjects:{
+				if(pthread_cancel((*current).windowThread) != PTHREAD_CANCEL_SUCCESS){
+					printTitledError("pthread error", "could not cancel window thread");
+				}
+				if(pthread_join((*current).windowThread, NULL) != PTHREAD_JOIN_SUCCESS){
+					printTitledError("pthread error", "could not join window thread");
+				}
+				if(pthread_cond_destroy(&(*current).windowCond) != PTHREAD_COND_DESTROY_SUCCESS){
+					printTitledError("pthread error", "could not destroy window cond");
+				}
+				if(pthread_mutex_destroy(&(*current).windowMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
+					printTitledError("pthread error", "could not destroy window mutex");
+				}
+				jmp freeCRTCDataLoop;
 			}
-*/
-
-
-
-			free((*current).crtcStart);
-			popPointer((*current).crtcToken);
-			xcb_destroy_window(connection, (*current).window);
-			if((*current).pixmap){
+			freeCRTCDataLoop:{
+				if(crtcCurrent < crtcWall){
+					free((*crtcCurrent).data);
+					popPointer((*crtcCurrent).dataToken);
+					inc crtcCurrent;
+					jmp freeCRTCDataLoop;
+				}
+				free((*current).crtcStart);
+				popPointer((*current).crtcToken);
+				jmp freeXObjects;
+			}
+			freeXObjects:{
+				xcb_free_pixmap(connection, (*current).gc);
 				xcb_free_pixmap(connection, (*current).pixmap);
+				xcb_destroy_window(connection, (*current).window);
+				inc current;
+				jmp freeMonitorCRTCLoop;
 			}
-			inc current;
-			jmp freeMonitorCRTCLoop;
 		}
 		jmp freeMonitors;
 	}
@@ -6139,16 +6376,48 @@ TWOPASSBOXBLUR(){
 	ret;
 }
 CANCELTHREADS(){
-	if(sleepThreadCreated){
-		if(pthread_cancel(sleepThread) != PTHREAD_CANCEL_SUCCESS){
-			printTitledError("pthread error", "could not cancel sleep thread");
+	Monitor *current = monitorStart;
+	Monitor *const wall = current + monitorAllocated;
+	jmp cancelSleepThread;
+	cancelSleepThread:{
+		if(sleepThreadCreated){
+			if(pthread_cancel(sleepThread) != PTHREAD_CANCEL_SUCCESS){
+				printTitledError("pthread error", "could not cancel sleep thread");
+			}
+			if(pthread_join(sleepThread, NULL) != PTHREAD_JOIN_SUCCESS){
+				printTitledError("pthread error", "could not join sleep thread");
+			}
+			if(pthread_cond_destroy(&sleepCond) != PTHREAD_COND_DESTROY_SUCCESS){
+				printTitledError("pthread error", "could not destroy sleep cond");
+			}
+			if(pthread_mutex_destroy(&sleepMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
+				printTitledError("pthread error", "could not destroy sleep mutex");
+			}
+			sleepThreadCreated = false;
 		}
-		if(pthread_join(sleepThread, NULL) != PTHREAD_JOIN_SUCCESS){
-			printTitledError("pthread error", "could not join sleep thread");
-		}
-		sleepThreadCreated = false;
+		jmp cancelWindowThreadLoop;
 	}
-	ret;
+	cancelWindowThreadLoop:{
+		if(current < wall){
+			if((*current).windowThreadCreated){
+				if(pthread_cancel((*current).windowThread) != PTHREAD_CANCEL_SUCCESS){
+					printTitledError("pthread error", "could not cancel window thread");
+				}
+				if(pthread_join((*current).windowThread, NULL) != PTHREAD_JOIN_SUCCESS){
+					printTitledError("pthread error", "could not join window thread");
+				}
+				if(pthread_cond_destroy(&(*current).windowCond) != PTHREAD_COND_DESTROY_SUCCESS){
+					printTitledError("pthread error", "could not destroy window cond");
+				}
+				if(pthread_mutex_destroy(&(*current).windowMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
+					printTitledError("pthread error", "could not destroy window mutex");
+				}
+			}
+			inc current;
+			jmp cancelWindowThreadLoop;
+		}
+		ret;
+	}
 }
 CLEANUP(){
 	deleteMemoryManager();
@@ -6160,6 +6429,7 @@ CLEANUP(){
 }
 PRINTUNACCOUNTEDFORPOINTERS(){
 	if(current < wall){
+		jmp printPointedVariablesLoop;
 		printPointedVariablesLoop:{
 			if((*current).data){
 				labelExamined = (*current).label;
@@ -6284,7 +6554,7 @@ PRINTCONFIGERROR(){
 		}
 		fprintf(errorStream, "\n\tpattern | %s", *(currentScopeInstructionList + (*currentScopeInstructionRoot).returnedCounter));
 		dec instructionStart;
-		data = *(currentScopeInstructionData + (*currentScopeInstructionRoot).returnedCounter);
+		data = instructionDataStart;
 		jmp printInstructionParameterLoop;
 	}
 	printInstructionParameterLoop: switch *(inc instructionStart) over
@@ -6294,7 +6564,7 @@ PRINTCONFIGERROR(){
 		to NUMBER_INSTRUCTION: /*----*/ jmp numberInstruction;
 		to STRING_INSTRUCTION: /*----*/ jmp stringInstruction;
 		to EXECUTE_INSTRUCTION: /*---*/ jmp executeInstruction;
-		/*! IMAGE_INSTRUCTION: */
+		to IMAGE_INSTRUCTION: /*-----*/ jmp imageInstruction;
 		off: /*----------------------*/ jmp printInstructionParameterLoopExit;
 	end
 	noneInstruction:{
@@ -6387,6 +6657,17 @@ PRINTCONFIGERROR(){
 		}
 		if(displaySimpleConfigErrors){
 			fprintf(errorStream, " execute");
+			jmp printInstructionParameterLoop;
+		}
+		fprintf(errorStream, " ([\"].*[\"]|[\'].*[\'])");
+		jmp printInstructionParameterLoop;
+	}
+	imageInstruction:{
+		if(instructionStart < instructionCurrent){
+			jmp printTilde;
+		}
+		if(displaySimpleConfigErrors){
+			fprintf(errorStream, " image");
 			jmp printInstructionParameterLoop;
 		}
 		fprintf(errorStream, " ([\"].*[\"]|[\'].*[\'])");
