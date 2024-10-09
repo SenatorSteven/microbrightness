@@ -12,6 +12,28 @@
 */
 
 /*!
+	what happens on restart to all the threads?
+*/
+
+/*!
+	segv has happened. just spam brightness up.
+*/
+
+/*!
+	sending any large amount of live instructions is a softlock.
+*/
+
+/*!
+	consider locking threads only to store needed public resources in local variables and doing operations using those.
+*/
+
+/*!
+	showing the window without changing the volume interferes with the previous up or down action and displays either a plus or a minus when it should be displaying neither.
+
+	maybe use a global that gets reset every eventLoop: and gets set on show-window or set-/increase-/decrease-brightness
+*/
+
+/*!
 	add mutex and cond guards to destroy them only when created.
 
 	errors about this have already come about, specifically about the sleep thread.
@@ -33,14 +55,12 @@
 
 /*!
 	visual artifacting has been observed.
+
+	consider updating the brightness mutex on the brightness up and down commands.
 */
 
 /*!
 	institute instruction to execute program commands instead of system commands. or maybe make those commands instructions unto themselves
-*/
-
-/*!
-	the icon could not only be set but updated whenever the user updates the brightness
 */
 
 /*!
@@ -52,7 +72,13 @@
 */
 
 /*!
-	use background pixmap instead of expose?
+	future updates:
+		+set an icon
+		+update the icon per brightness update
+		+pair monitors with backlights and allow to either use software or hardware brightness
+		+add more features
+
+		-if the window is transparent then there is a whole lot of redrawing being done for no real reason.
 */
 
 
@@ -109,6 +135,7 @@ SOFTWARE. */
 	#include <errno.h>
 	#include <dirent.h>
 	#include <limits.h>
+	#include <math.h>
 	#include <pthread.h>
 	#include <stdarg.h>
 	#include <stdio.h>
@@ -249,11 +276,12 @@ SOFTWARE. */
 
 	#define NONE_COMMAND /*------------------------------*/ (0)
 	#define EXECUTE_COMMAND /*---------------------------*/ (1)
-	#define BRIGHTNESS_UP_COMMAND /*---------------------*/ (2)
-	#define BRIGHTNESS_DOWN_COMMAND /*-------------------*/ (3)
-	#define SHOW_WINDOW_COMMAND /*-----------------------*/ (4)
-	#define RESTART_COMMAND /*---------------------------*/ (5)
-	#define EXIT_COMMAND /*------------------------------*/ (6)
+	#define SET_BRIGHTNESS_COMMAND /*--------------------*/ (2)
+	#define INCREASE_BRIGHTNESS_COMMAND /*---------------*/ (3)
+	#define DECREASE_BRIGHTNESS_COMMAND /*---------------*/ (4)
+	#define SHOW_WINDOW_COMMAND /*-----------------------*/ (5)
+	#define RESTART_COMMAND /*---------------------------*/ (6)
+	#define EXIT_COMMAND /*------------------------------*/ (7)
 
 	#define QUIT() /*------------------------------------*/ local void             quit(int signal)
 	#define GETSHAREDCHARACTER() /*----------------------*/ local int              getSharedCharacter(FILE *const configFile)
@@ -351,9 +379,9 @@ SOFTWARE. */
 	} DynamicDataSegment;
 
 	def struct{
-		void * /*--------------*/ data;
+		void * /*--------------*/ dataStart;
 		uint32 /*--------------*/ dataToken;
-		uint8 /*---------------*/ pad0[4];
+		xcb_randr_crtc_t /*----*/ crtc;
 		uint16 * /*------------*/ red;
 		uint16 * /*------------*/ green;
 		uint16 * /*------------*/ blue;
@@ -361,8 +389,8 @@ SOFTWARE. */
 		double /*--------------*/ redGamma;
 		double /*--------------*/ greenGamma;
 		double /*--------------*/ blueGamma;
-		xcb_randr_crtc_t /*----*/ crtc;
 		uint32 /*--------------*/ gammaSize;
+		uint8 /*---------------*/ pad0[4];
 	} Crtc;
 
 	def struct{
@@ -380,7 +408,9 @@ SOFTWARE. */
 		xcb_pixmap_t /*--------*/ pixmap;
 		xcb_gcontext_t /*------*/ gc;
 		bool /*----------------*/ windowMapped;
-		uint8 /*---------------*/ pad0[6];
+		int8 /*----------------*/ previousBrightness;
+		int8 /*----------------*/ brightness;
+		uint8 /*---------------*/ pad0[4];
 
 
 
@@ -728,8 +758,9 @@ SOFTWARE. */
 	local const char *const /*------------*/ commandList[] = {
 		  "none"
 		, "execute"
-		, "brightness-up"
-		, "brightness-down"
+		, "set-brightness"
+		, "increase-brightness"
+		, "decrease-brightness"
 		, "show-window"
 		, "restart"
 		, "exit"
@@ -751,8 +782,9 @@ SOFTWARE. */
 	local const Instruction /*------------*/ stopInstruction[] = {END_INSTRUCTION};
 
 	local const Instruction /*------------*/ executeDoSubinstruction[] = {NAME_INSTRUCTION, EXECUTE_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessUpDoSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessDownDoSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ setBrightnessDoSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ increaseBrightnessDoSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ decreaseBrightnessDoSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ xSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ ySetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ xOffsetSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
@@ -774,10 +806,12 @@ SOFTWARE. */
 	local const Instruction /*------------*/ durationSetSubinstruction[] = {NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ executeGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, EXECUTE_INSTRUCTION, END_INSTRUCTION};
 	local const Instruction /*------------*/ executeGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, EXECUTE_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessUpGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessUpGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessDownGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
-	local const Instruction /*------------*/ brightnessDownGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ setBrightnessGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ setBrightnessGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ increaseBrightnessGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ increaseBrightnessGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ decreaseBrightnessGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
+	local const Instruction /*------------*/ decreaseBrightnessGrabButtonSubinstruction[] = {NAME_LIST_INSTRUCTION, NUMBER_INSTRUCTION, NAME_INSTRUCTION, NUMBER_INSTRUCTION, END_INSTRUCTION};
 
 	local StringNodeRoot *const *const /*-*/ helpInstructionData = NULL;
 	local StringNodeRoot *const *const /*-*/ expandInstructionData = NULL;
@@ -794,8 +828,9 @@ SOFTWARE. */
 	local StringNodeRoot *const *const /*-*/ stopInstructionData = NULL;
 
 	local StringNodeRoot *const /*--------*/ executeDoSubinstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ brightnessUpDoSubinstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ brightnessDownDoSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ setBrightnessDoSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ increaseBrightnessDoSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ decreaseBrightnessDoSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ xSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ ySetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ xOffsetSetSubinstructionData[] = {&variableRoot};
@@ -817,10 +852,12 @@ SOFTWARE. */
 	local StringNodeRoot *const /*--------*/ durationSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ executeGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
 	local StringNodeRoot *const /*--------*/ executeGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
-	local StringNodeRoot *const /*--------*/ brightnessUpGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
-	local StringNodeRoot *const /*--------*/ brightnessUpGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
-	local StringNodeRoot *const /*--------*/ brightnessDownGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
-	local StringNodeRoot *const /*--------*/ brightnessDownGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ setBrightnessGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ setBrightnessGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ increaseBrightnessGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ increaseBrightnessGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ decreaseBrightnessGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
+	local StringNodeRoot *const /*--------*/ decreaseBrightnessGrabButtonSubinstructionData[] = {&modifierRoot, &commandRoot};
 
 	#define getInstruction(i) /*------------*/ (i##Instruction)
 	#define getInstructionData(i) /*--------*/ (i##InstructionData)
@@ -935,12 +972,20 @@ SOFTWARE. */
 	local uint32 * /*--------*/ data;
 
 /*! program globals */
-	local uint /*------------*/ oldAverageBrightness;
-	local uint /*------------*/ averageBrightness;
 	local pthread_t /*-------*/ sleepThread;
 	local bool /*------------*/ sleepThreadCreated;
 	local pthread_mutex_t /*-*/ sleepMutex;
 	local pthread_cond_t /*--*/ sleepCond;
+
+
+
+	local pthread_mutex_t /*-*/ globalsMutex;
+
+
+
+	local pthread_mutex_t /*-*/ brightnessMutex;
+
+
 
 /*! config globals */
 	local int /*-------------*/ x;
@@ -999,45 +1044,141 @@ SOFTWARE. */
 
 
 
+#define NONE_BRIGHTNESS_OPERATION /*-----*/ (0)
+#define SET_BRIGHTNESS_OPERATION /*------*/ (1)
+#define INCREASE_BRIGHTNESS_OPERATION /*-*/ (2)
+#define DECREASE_BRIGHTNESS_OPERATION /*-*/ (3)
 
-#include <math.h>
-#include <sys/time.h>
-#include <time.h>
+#define RESETPOSITION() /*---------------*/ local void   resetPosition(void)
+#define RESETSIZE() /*-------------------*/ local void   resetSize(void)
+#define GETMONITORGAMMA() /*-------------*/ local bool   getMonitorGamma(void)
+#define FINDLASTNONCLAMPED() /*----------*/ local uint   findLastNonClamped(const uint16 *current, const int size)
+#define ROUNDDOUBLE() /*-----------------*/ local double roundDouble(double number)
+#define SETMONITORGAMMA() /*-------------*/ local void   setMonitorGamma(const int newBrightness, const uint8 operation)
+#define MIN() /*-------------------------*/ local double min(const double x, const double y)
 
-#define GETMONITORGAMMA() /*---------*/ local bool   getMonitorGamma(void)
-#define SETBRIGHTNESS() /*-----------*/ local void   setBrightness(int brightness, const bool raisingBrightness)
+RESETPOSITION();
+RESETSIZE();
+GETMONITORGAMMA();
+FINDLASTNONCLAMPED();
+ROUNDDOUBLE();
+SETMONITORGAMMA();
+MIN();
 
-#define SLEEPMAIN() /*---------------*/ local void * sleepMain(void *arg)
-#define DRAWWINDOWMAIN() /*----------*/ local void * drawWindowMain(void *arg)
-#define DRAWWINDOW() /*--------------*/ local void   drawWindow(Monitor *const monitor, const xcb_drawable_t drawable)
-#define FREEMONITORS() /*------------*/ local void   freeMonitors(void)
 
-SLEEPMAIN();
-DRAWWINDOWMAIN();
+
+#define DRAWWINDOW() /*------------------*/ local void   drawWindow(Monitor *const monitor)
+#define FREEMONITORS() /*----------------*/ local void   freeMonitors(void)
+
 DRAWWINDOW();
 FREEMONITORS();
 
 
 
+#define SLEEPMAIN() /*-------------------*/ local void * sleepMain(void *arg)
+#define DRAWWINDOWMAIN() /*--------------*/ local void * drawWindowMain(void *arg)
+
+SLEEPMAIN();
+DRAWWINDOWMAIN();
 
 
 
 
 
 
-#define MIN() /*---------------------*/ local double min(const double x, const double y)
-#define ROUNDDOUBLE() /*-------------*/ local double roundDouble(double number)
-#define FINDNONCLAMPED() /*----------*/ local uint   findNonClamped(const uint16 *arrayCurrent, const int size)
 
-MIN();
-ROUNDDOUBLE();
-FINDNONCLAMPED();
 
-MIN(){
-	if(x < y){
-		ret x;
+
+RESETPOSITION(){
+	Monitor *current = monitorStart;
+	Monitor *const wall = current + monitorAllocated;
+	jmp loop;
+	loop:{
+		if(current < wall){
+			struct{
+				int32 /*--*/ x;
+				int32 /*--*/ y;
+				uint32 /*-*/ w;
+				uint32 /*-*/ h;
+				uint32 /*-*/ stackMode;
+			} valueList;
+			switch horizontalAlignment over
+				to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ valueList.x = (*current).leftX; /*------------------------------*/ brk;
+				to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ valueList.x = (*current).leftX + ((*current).w - width) / 2; /*-*/ brk;
+				to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ valueList.x = (*current).rightX - width; /*---------------------*/ brk;
+				off: /*----------------------------*/ valueList.x = x; /*---------------------------------------------*/ brk;
+			end
+			switch verticalAlignment over
+				to TOP_VERTICAL_ALIGNMENT: /*----*/ valueList.y = (*current).topY; /*-------------------------------*/ brk;
+				to CENTER_VERTICAL_ALIGNMENT: /*-*/ valueList.y = (*current).topY + ((*current).h - height) / 2; /*-*/ brk;
+				to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ valueList.y = (*current).bottomY - height; /*-------------------*/ brk;
+				off: /*--------------------------*/ valueList.y = y; /*---------------------------------------------*/ brk;
+			end
+			valueList.x += xOffset;
+			valueList.y += yOffset;
+			xcb_configure_window(connection, (*current).window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, &valueList);
+			inc current;
+			jmp loop;
+		}
+		xcb_flush(connection);
+		ret;
 	}
-	ret y;
+}
+RESETSIZE(){
+	Monitor *current = monitorStart;
+	Monitor *const wall = current + monitorAllocated;
+	struct{
+		uint32 /*-*/ w;
+		uint32 /*-*/ h;
+	} valueList;
+	valueList.w = width;
+	valueList.h = height;
+	if(!valueList.w){
+		valueList.w = 1;
+	}
+	if(!valueList.h){
+		valueList.h = 1;
+	}
+	jmp loop;
+	loop:{
+		if(current < wall){
+			xcb_free_gc(connection, (*current).gc);
+			xcb_free_pixmap(connection, (*current).pixmap);
+			(*current).pixmap = xcb_generate_id(connection);
+			(*current).gc = xcb_generate_id(connection);
+			xcb_create_pixmap(connection, depth, (*current).pixmap, (*current).window, valueList.w, valueList.h);
+			xcb_create_gc(connection, (*current).gc, (*current).window, XCB_NONE, NULL);
+			xcb_change_window_attributes(connection, (*current).window, XCB_CW_BACK_PIXMAP, &(*current).pixmap);
+			xcb_configure_window(connection, (*current).window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, &valueList);
+			inc current;
+			jmp loop;
+		}
+		xcb_flush(connection);
+		ret;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+FINDLASTNONCLAMPED(){
+	const uint16 *const start = current - size;
+	jmp loop;
+	loop:{
+		if(dec current >= start){
+			if(*current < 65535){
+				ret current - start;
+			}
+			jmp loop;
+		}
+		ret 1;
+	}
 }
 ROUNDDOUBLE(){
 	double doubleNumber;
@@ -1045,247 +1186,432 @@ ROUNDDOUBLE(){
 	doubleNumber = (int)number;
 	ret doubleNumber / 100 + (number - doubleNumber >= 0.5) * 0.01;
 }
-FINDNONCLAMPED(){
-	const uint16 *const arrayStart = arrayCurrent - size;
-	jmp loop;
-	loop:{
-		if(dec arrayCurrent >= arrayStart){
-			if(*arrayCurrent < 65535){
-				ret arrayCurrent - arrayStart;
-			}
-			jmp loop;
-		}
-	}
-	ret 1;
-}
 GETMONITORGAMMA(){
-
-
-
-	/*! understand how this works */
-
-
-
 	#define GAMMA_COOKIE_DATA_SIZE /*-*/ (16)
 	Monitor *monitorCurrent = monitorStart;
 	Monitor *monitorWall = monitorCurrent + monitorAllocated;
-	xcb_randr_get_crtc_gamma_cookie_t *cookieStart;
-	xcb_randr_get_crtc_gamma_cookie_t *cookieCurrent;
 	uint gammaCookieSize = GAMMA_COOKIE_DATA_SIZE;
 	uint gammaCookieAllocated = 0;
-	if(!(cookieStart = malloc(gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t)))){
-		ret false;
-	}
-	while(monitorCurrent < monitorWall){
-		gammaCookieAllocated += (*monitorCurrent).crtcAllocated;
-		inc monitorCurrent;
-		if(gammaCookieAllocated == gammaCookieSize){
-			void *temp;
-			gammaCookieSize += GAMMA_COOKIE_DATA_SIZE;
-			if(!(temp = realloc(cookieStart, gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t)))){
-				ret false;
+	xcb_randr_get_crtc_gamma_cookie_t *cookieStart = malloc(gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t));
+	xcb_randr_get_crtc_gamma_cookie_t *cookieCurrent;
+	uint cookieToken = pushPointer(cookieStart, "getMonitorGamma() gamma cookie start pointer", iFree);
+	if(!cookieStart){
+		jmp setMonitorGammaDefaultLoop;
+		setMonitorGammaDefaultLoop:{
+			if(monitorCurrent < monitorWall){
+				Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
+				Crtc *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+				jmp setCRTCGammaDefaultLoop;
+				setCRTCGammaDefaultLoop:{
+					if(crtcCurrent < crtcWall){
+						(*crtcCurrent).dataStart = NULL;
+						(*crtcCurrent).dataToken = 0;
+						inc crtcCurrent;
+						jmp setCRTCGammaDefaultLoop;
+					}
+				}
+				inc monitorCurrent;
+				jmp setMonitorGammaDefaultLoop;
 			}
-			cookieStart = temp;
+			printTitledError("memory allocation error", "could not allocate memory for gamma cookies");
+			ret false;
 		}
 	}
-	cookieCurrent = cookieStart;
-	monitorCurrent = monitorStart;
-	while(monitorCurrent < monitorWall){
-		Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
-		Crtc *crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
-		while(crtcCurrent < crtcWall){
-			*cookieCurrent = xcb_randr_get_crtc_gamma_unchecked(connection, (*crtcCurrent).crtc);
-			inc crtcCurrent;
-			inc cookieCurrent;
+	jmp allocateCookiesLoop;
+	allocateCookiesLoop:{
+		if(monitorCurrent < monitorWall){
+			gammaCookieAllocated += (*monitorCurrent).crtcAllocated;
+			if(gammaCookieAllocated == gammaCookieSize){
+				void *temp;
+				gammaCookieSize += GAMMA_COOKIE_DATA_SIZE;
+				temp = realloc(cookieStart, gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t));
+				updatePointer(cookieToken, temp);
+				if(!temp){
+					printTitledError("memory allocation error", "could not reallocate memory for gamma cookies");
+					free(cookieStart);
+					popPointer(cookieToken);
+					ret false;
+				}
+				cookieStart = temp;
+			}
+			inc monitorCurrent;
+			jmp allocateCookiesLoop;
 		}
-		inc monitorCurrent;
+		cookieCurrent = cookieStart;
+		monitorCurrent = monitorStart;
+		jmp getMonitorCRTCGammaRequestLoop;
 	}
-	cookieCurrent = cookieStart;
-	monitorCurrent = monitorStart;
-	while(monitorCurrent < monitorWall){
-		Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
-		Crtc *crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
-		while(crtcCurrent < crtcWall){
-			xcb_randr_get_crtc_gamma_reply_t *gammaReply;
-			if((gammaReply = xcb_wait_for_reply(connection, *cookieCurrent, NULL))){
-				(*crtcCurrent).data = gammaReply;
-				(*crtcCurrent).red = xcb_randr_get_crtc_gamma_red(gammaReply);
-				(*crtcCurrent).green = xcb_randr_get_crtc_gamma_green(gammaReply);
-				(*crtcCurrent).blue = xcb_randr_get_crtc_gamma_blue(gammaReply);
-				(*crtcCurrent).gammaSize = xcb_randr_get_crtc_gamma_red_length(gammaReply);
-				{
-					double redGamma;
-					double greenGamma;
-					double blueGamma;
+	getMonitorCRTCGammaRequestLoop:{
+		if(monitorCurrent < monitorWall){
+			Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
+			Crtc *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+			jmp getCRTCGammaRequestLoop;
+			getCRTCGammaRequestLoop:{
+				if(crtcCurrent < crtcWall){
+					*cookieCurrent = xcb_randr_get_crtc_gamma_unchecked(connection, (*crtcCurrent).crtc);
+					inc crtcCurrent;
+					inc cookieCurrent;
+					jmp getCRTCGammaRequestLoop;
+				}
+				inc monitorCurrent;
+				jmp getMonitorCRTCGammaRequestLoop;
+			}
+		}
+		cookieCurrent = cookieStart;
+		monitorCurrent = monitorStart;
+		jmp getMonitorCRTCGammaReplyLoop;
+	}
+	getMonitorCRTCGammaReplyLoop:{
+		if(monitorCurrent < monitorWall){
+			Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
+			Crtc *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+			jmp getCRTCGammaReplyLoop;
+			getCRTCGammaReplyLoop:{
+				if(crtcCurrent < crtcWall){
+					xcb_randr_get_crtc_gamma_reply_t *const gammaReply = xcb_wait_for_reply(connection, *cookieCurrent, NULL);
+					uint gammaToken = pushPointer(gammaReply, "getMonitorGamma() gamma reply", iFree);
+					if(gammaReply){
+
+
+
+						/*! understand how this works */
+
+
+
+						/*! what is the dataStart for? is the gamma reply data in there? it needs to be freed once we're done with it otherwise we'll have problems. but when are we done with it? */
+
+
+
+
+
+
+
+
+
+						(*crtcCurrent).dataStart = gammaReply;
+						(*crtcCurrent).dataToken = gammaToken;
+						(*crtcCurrent).red = xcb_randr_get_crtc_gamma_red(gammaReply);
+						(*crtcCurrent).green = xcb_randr_get_crtc_gamma_green(gammaReply);
+						(*crtcCurrent).blue = xcb_randr_get_crtc_gamma_blue(gammaReply);
+						(*crtcCurrent).gammaSize = xcb_randr_get_crtc_gamma_red_length(gammaReply);
+						{
+							double redGamma;
+							double greenGamma;
+							double blueGamma;
+							uint16 *red = (*crtcCurrent).red;
+							uint16 *green = (*crtcCurrent).green;
+							uint16 *blue = (*crtcCurrent).blue;
+							if((*crtcCurrent).gammaSize < 2 or (*crtcCurrent).gammaSize > 65536){
+								fprintf(stderr, "gamma size not in range [2, 65536]\n");
+
+
+
+								/*! what should be done for this case? deallocation of gamma data maybe? */
+
+
+
+							}else{
+
+
+
+								/*!
+									the size of the gamma is stored and the last and middle observations are used. these help us understand the nature of the curve because by finding the middle point and
+									the final point where the brightness is not maximum (non-clamped, "not limited up to that value") we can confidently say we know what the curve looks like in the
+									input-output cartesian plane.
+
+									by using the latest observation we get a greater range on the given data and therefore more accuracy plus we avoid any danger of clipping.
+
+									the middle observation is then the latest observation offset divided by 2 rather flat-out the middle observation. that's because what if the already-in-use curve is
+									wonky in any way? we don't wanna use a meaningless value such as the same value as the latest non-clamped one.
+								*/
+
+								uint gammaSize = (*crtcCurrent).gammaSize;
+								double configuredBrightness;
+								double input0;
+								double value0;
+								double input1;
+								double value1;
+								uint middleObservation;
+								uint lastRedObservation = findLastNonClamped(red, gammaSize);
+								uint lastGreenObservation = findLastNonClamped(green, gammaSize);
+								uint lastBlueObservation = findLastNonClamped(blue, gammaSize);
+								uint16 *bestColorArray = red;
+								uint bestLastObservation = lastRedObservation;
+								if(lastGreenObservation > bestLastObservation){
+									bestColorArray = green;
+									bestLastObservation = lastGreenObservation;
+								}
+								if(lastBlueObservation > bestLastObservation){
+									bestColorArray = blue;
+									bestLastObservation = lastBlueObservation;
+								}
+								middleObservation = bestLastObservation / 2;
+
+
+
+								/*!
+									(input, value) is a point in R^2 where x is input and y is output. by normalizing the values here, we can use them to update the brightness using a power law.
+								*/
+
+								input0 = (double)(middleObservation + 1) / gammaSize;
+								value0 = (double)(*(bestColorArray + middleObservation)) / 65535;
+								input1 = (double)(bestLastObservation + 1) / gammaSize;
+								value1 = (double)(*(bestColorArray + bestLastObservation)) / 65535;
+
+
+
+								/*! if the screen's brightness rounds up to 1%, it's basically just about not black. otherwise, it's literally just black. */
+
+								if(roundDouble(value1) < 0.01){
+									configuredBrightness = 0.0;
+									redGamma   = 1.0;
+									greenGamma = 1.0;
+									blueGamma  = 1.0;
+								}else{
+
+
+
+									/*!
+										if the last observation we wanna use is the last available one, the brightness is just the normalized output value of it.
+
+										otherwise, use the two points obtained to calculate the power law to find the brightness currently on display. (haha get it)
+
+
+
+										not sure why we use this though.
+									*/
+
+/*!
+									if(bestLastObservation + 1 == gammaSize){
+										configuredBrightness = value1;
+									}else{
+*/
+
+
+
+#define ln(a) /*-*/ (log(a))
+
+
+
+										/*!
+											natural logarithms are used here (yes, log() is actually ln()) to interpolate the difference of the two points in logarithmic space. all that needs to be done
+											after that is go back to linear space via euler's number.
+
+											to understand this better, try with e^ln(w) where w is an expression and open that expression up to form what we have below.
+										*/
+
+										/*!
+											 ln(input1) * ln(value0) - ln(input0) * ln(value1)
+											 -------------------------------------------------
+											              ln(input1) - ln(input0)
+											e
+										*/
+
+
+
+										/*! put the final subtraction into the ln() again to save on operations */
+										configuredBrightness = exp((ln(input1) * ln(value0) - ln(input0) * ln(value1)) / (ln(input1) - ln(input0)));
+/*!
+									}
+*/
+
+
+
+									/*! keep only two digits right of the decimal point */
+
+									configuredBrightness = roundDouble(configuredBrightness);
+
+
+
+									/*! per color calculations:
+
+										double observation = lastRedObservation / 2 + 1;
+										gammaSize = *(red + lastRedObservation / 2);
+
+										ln(r / 65535) - ln(configuredBrightness)
+										----------------------------------------
+										    ln(overservation) - ln(gammaSize)
+									*/
+
+
+
+									/*! these are just the per-color calculation of the above inputs and outputs for the brightness */
+
+									redGamma   = ln((double)*(red   + lastRedObservation   / 2) / configuredBrightness / 65535) / ln(((double)lastRedObservation   / 2 + 1) / gammaSize);
+									greenGamma = ln((double)*(green + lastGreenObservation / 2) / configuredBrightness / 65535) / ln(((double)lastGreenObservation / 2 + 1) / gammaSize);
+									blueGamma  = ln((double)*(blue  + lastBlueObservation  / 2) / configuredBrightness / 65535) / ln(((double)lastBlueObservation  / 2 + 1) / gammaSize);
+
+
+
+									redGamma = roundDouble(redGamma);
+									greenGamma = roundDouble(greenGamma);
+									blueGamma = roundDouble(blueGamma);
+
+
+
+									/*! there is really no gamma and brightness? and? why are they maxxed out? */
+
+									if(!configuredBrightness){
+										configuredBrightness = 1.0;
+									}
+									if(!redGamma){
+										redGamma = 1.0;
+									}
+									if(!greenGamma){
+										greenGamma = 1.0;
+									}
+									if(!blueGamma){
+										blueGamma = 1.0;
+									}
+
+
+
+
+
+
+
+
+
+									/*! what about the brightness? don't we use the other function to have one unified brightness? why don't we use a per-monitor one, like we store it above? use mutexes? */
+
+
+
+								}
+								(*crtcCurrent).brightness = configuredBrightness;
+								(*crtcCurrent).redGamma   = redGamma;
+								(*crtcCurrent).greenGamma = greenGamma;
+								(*crtcCurrent).blueGamma  = blueGamma;
+							}
+						}
+					}
+					inc crtcCurrent;
+					inc cookieCurrent;
+					jmp getCRTCGammaReplyLoop;
+				}
+			}
+			inc monitorCurrent;
+			jmp getMonitorCRTCGammaReplyLoop;
+		}
+		free(cookieStart);
+		popPointer(cookieToken);
+		ret true;
+	}
+	#undef  GAMMA_COOKIE_DATA_SIZE
+}
+SETMONITORGAMMA(){
+	Monitor *monitorCurrent;
+	Monitor *monitorWall;
+	double newDoubleBrightness = (double)newBrightness / 100;
+	switch operation over
+		to SET_BRIGHTNESS_OPERATION: /*------*/ brk;
+		to INCREASE_BRIGHTNESS_OPERATION: /*-*/ brk;
+		to DECREASE_BRIGHTNESS_OPERATION: /*-*/ brk;
+		off: /*------------------------------*/ ret;
+	end
+	switch whichMonitorUpdates over
+		to POINTER_WHICH_MONITOR:{
+			monitorCurrent = getPointerMonitor();
+			monitorWall = monitorCurrent + 1;
+			jmp setMonitorGammaLoop;
+		}
+		to ALL_WHICH_MONITOR:{
+			monitorCurrent = monitorStart;
+			monitorWall = monitorCurrent + monitorAllocated;
+			jmp setMonitorGammaLoop;
+		}
+		off:{
+			ret;
+		}
+	end
+	setMonitorGammaLoop:{
+		if(monitorCurrent < monitorWall){
+			Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
+			Crtc *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+			double averageBrightness = 0.0;
+			uint brightnessCounter = 0;
+			jmp setCRTCGammaLoop;
+			setCRTCGammaLoop:{
+				if(crtcCurrent < crtcWall){
+					const double gammaSize = (*crtcCurrent).gammaSize;
+					const double gammaMinusOne = gammaSize - 1;
+					const uint16 redGamma = (*crtcCurrent).redGamma;
+					const uint16 greenGamma = (*crtcCurrent).greenGamma;
+					const uint16 blueGamma = (*crtcCurrent).blueGamma;
+					const bool sameGammas = redGamma == greenGamma and greenGamma == blueGamma;
 					uint16 *red = (*crtcCurrent).red;
 					uint16 *green = (*crtcCurrent).green;
 					uint16 *blue = (*crtcCurrent).blue;
-					if((*crtcCurrent).gammaSize < 2 or (*crtcCurrent).gammaSize > 65536){
-						fprintf(stderr, "gamma size not in range [2, 65536]\n");
-					}else{
-						uint gammaSize = (*crtcCurrent).gammaSize;
-						double configuredBrightness;
-						double i1;
-						double v1;
-						double i2;
-						double v2;
-						uint middleObservation;
-						uint bestLastObservation;
-						uint lastRedObservation;
-						uint lastGreenObservation;
-						uint lastBlueObservation;
-						uint16 *bestColorArray;
-						lastRedObservation   = findNonClamped(red  , gammaSize);
-						lastGreenObservation = findNonClamped(green, gammaSize);
-						lastBlueObservation  = findNonClamped(blue , gammaSize);
-						bestColorArray = red;
-						bestLastObservation = lastRedObservation;
-						if(lastGreenObservation > bestLastObservation){
-							bestLastObservation = lastGreenObservation;
-							bestColorArray = green;
-						}
-						if(lastBlueObservation > bestLastObservation){
-							bestLastObservation = lastBlueObservation;
-							bestColorArray = blue;
-						}
-						middleObservation = bestLastObservation / 2;
-						i1 = (double)(middleObservation   + 1) / gammaSize;
-						i2 = (double)(bestLastObservation + 1) / gammaSize;
-						v1 = (double)(*(bestColorArray + middleObservation  )) / 65535;
-						v2 = (double)(*(bestColorArray + bestLastObservation)) / 65535;
-						if(roundDouble(v2) < 0.01){
-							configuredBrightness = 0.0;
-							redGamma   = 1.0;
-							greenGamma = 1.0;
-							blueGamma  = 1.0;
+					double brightness = (*crtcCurrent).brightness;
+					double currentGamma = 0.0;
+					if(!(*crtcCurrent).dataStart){
+						inc crtcCurrent;
+						jmp setCRTCGammaLoop;
+					}
+					switch operation over
+						to SET_BRIGHTNESS_OPERATION: /*------*/ brightness = newDoubleBrightness; /*--*/ brk;
+						to INCREASE_BRIGHTNESS_OPERATION: /*-*/ brightness += newDoubleBrightness; /*-*/ brk;
+						to DECREASE_BRIGHTNESS_OPERATION: /*-*/ brightness -= newDoubleBrightness; /*-*/ brk;
+						off: /*------------------------------*/ /*------------------------------------*/ ret;
+					end
+					if(brightness > 1.0){
+						brightness = 1.0;
+					}elif(brightness < 0.0){
+						brightness = 0.0;
+					}
+					(*crtcCurrent).brightness = brightness;
+					averageBrightness += brightness;
+					inc brightnessCounter;
+					jmp setCRTCGammaValuesLoop;
+					setCRTCGammaValuesLoop:{
+
+
+
+						/*! understand how and why this works */
+
+						const double value = currentGamma / gammaMinusOne;
+						*red = min(pow(value, redGamma) * brightness, 1.0) * 65535;
+
+
+
+						if(sameGammas){
+							*green = *red;
+							*blue = *green;
 						}else{
-							if(bestLastObservation + 1 == gammaSize){
-								configuredBrightness = v2;
-							}else{
-								configuredBrightness = exp((log(v2) * log(i1) - log(v1) * log(i2)) / log(i1 / i2));
-							}
-							redGamma   = log((double)red  [lastRedObservation   / 2] / configuredBrightness / 65535) / log((double)(lastRedObservation   / 2 + 1) / gammaSize);
-							greenGamma = log((double)green[lastGreenObservation / 2] / configuredBrightness / 65535) / log((double)(lastGreenObservation / 2 + 1) / gammaSize);
-							blueGamma  = log((double)blue [lastBlueObservation  / 2] / configuredBrightness / 65535) / log((double)(lastBlueObservation  / 2 + 1) / gammaSize);
-							configuredBrightness = roundDouble(configuredBrightness);
-							redGamma   = roundDouble(redGamma);
-							greenGamma = roundDouble(greenGamma);
-							blueGamma  = roundDouble(blueGamma);
-							if(!configuredBrightness) configuredBrightness = 1.0;
-							if(!redGamma)             redGamma             = 1.0;
-							if(!greenGamma)           greenGamma           = 1.0;
-							if(!blueGamma)            blueGamma            = 1.0;
-							(*crtcCurrent).brightness = configuredBrightness;
-							(*crtcCurrent).redGamma   = redGamma;
-							(*crtcCurrent).greenGamma = greenGamma;
-							(*crtcCurrent).blueGamma  = blueGamma;
+							*green = min(pow(value, greenGamma) * brightness, 1.0) * 65535;
+							*blue = min(pow(value, blueGamma) * brightness, 1.0) * 65535;
 						}
+						if(inc currentGamma < gammaSize){
+							inc red;
+							inc green;
+							inc blue;
+							jmp setCRTCGammaValuesLoop;
+						}
+						xcb_randr_set_crtc_gamma(connection, (*crtcCurrent).crtc, (*crtcCurrent).gammaSize, (*crtcCurrent).red, (*crtcCurrent).green, (*crtcCurrent).blue);
+						inc crtcCurrent;
+						jmp setCRTCGammaLoop;
 					}
 				}
 			}
-			inc crtcCurrent;
-			inc cookieCurrent;
+			{
+				const double monitorBrightness = averageBrightness * 100 / brightnessCounter;
+				(*monitorCurrent).previousBrightness = (*monitorCurrent).brightness;
+				if((*monitorCurrent).previousBrightness == -1){
+					(*monitorCurrent).previousBrightness = monitorBrightness;
+				}
+				(*monitorCurrent).brightness = monitorBrightness;
+			}
+			inc monitorCurrent;
+			jmp setMonitorGammaLoop;
 		}
-		inc monitorCurrent;
+		xcb_flush(connection);
+		ret;
 	}
-	free(cookieStart);
-	ret true;
-	#undef  GAMMA_COOKIE_DATA_SIZE
-
-
-
 }
-SETBRIGHTNESS(){
-	if(!raisingBrightness){
-		brightness = -brightness;
+MIN(){
+	if(x < y){
+		ret x;
 	}
-
-	/*! replace this with the which monitor doohickeys */
-	int whichMonitor = -1;
-
-
-
-	/*! understand how this works */
-
-
-
-	Monitor *monitorCurrent = monitorStart;
-	Monitor *wall = monitorCurrent + monitorAllocated;
-	double brightnessOffset = brightness;
-	uint brightnessCounter = 0;
-	double average = 0.0;
-	brightnessOffset /= 100;
-	if(whichMonitor > -1){
-		monitorCurrent += whichMonitor;
-		wall = monitorCurrent + 1;
-	}
-	while(monitorCurrent < wall){
-		Crtc *crtcCurrent = (*monitorCurrent).crtcStart;
-		Crtc *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
-		if(!crtcCurrent){
-			jmp iterateCRTCLoopControl;
-		}
-		jmp iterateCRTCLoop;
-		iterateCRTCLoop:{
-			const double gammaSize = (*crtcCurrent).gammaSize;
-			double brightnessUsed = (*crtcCurrent).brightness + brightnessOffset;
-			uint16 *red   = (*crtcCurrent).red;
-			uint16 *green = (*crtcCurrent).green;
-			uint16 *blue  = (*crtcCurrent).blue;
-			const double gammaMinusOne = gammaSize - 1;
-			double currentGamma = 0.0;
-			if(brightnessUsed > 1.0){
-				brightnessUsed = 1.0;
-			}elif(brightnessUsed < 0.0){
-				brightnessUsed = 0.0;
-			}
-			(*crtcCurrent).brightness = brightnessUsed;
-			average += brightnessUsed;
-			inc brightnessCounter;
-			if((*crtcCurrent).redGamma == (*crtcCurrent).greenGamma and (*crtcCurrent).greenGamma == (*crtcCurrent).blueGamma){
-				jmp updateCRTCBrightness0Loop;
-				updateCRTCBrightness0Loop:{
-					*red = min(pow(currentGamma / gammaMinusOne, (*crtcCurrent).redGamma) * brightnessUsed, 1.0) * 65535;
-					*green = *red;
-					*blue = *green;
-					if(inc currentGamma < gammaSize){
-						inc red;
-						inc green;
-						inc blue;
-						jmp updateCRTCBrightness0Loop;
-					}
-				}
-			}else{
-				jmp updateCRTCBrightness1Loop;
-				updateCRTCBrightness1Loop:{
-					const double value = currentGamma / gammaMinusOne;
-					*red   = min(pow(value, (*crtcCurrent).redGamma  ) * brightnessUsed, 1.0) * 65535;
-					*green = min(pow(value, (*crtcCurrent).greenGamma) * brightnessUsed, 1.0) * 65535;
-					*blue  = min(pow(value, (*crtcCurrent).blueGamma ) * brightnessUsed, 1.0) * 65535;
-					if(inc currentGamma < gammaSize){
-						inc red;
-						inc green;
-						inc blue;
-						jmp updateCRTCBrightness1Loop;
-					}
-				}
-			}
-			xcb_randr_set_crtc_gamma(connection, (*crtcCurrent).crtc, (*crtcCurrent).gammaSize, (*crtcCurrent).red, (*crtcCurrent).green, (*crtcCurrent).blue);
-			xcb_flush(connection);
-			jmp iterateCRTCLoopControl;
-		}
-		iterateCRTCLoopControl:{
-			if(inc crtcCurrent < crtcWall){
-				jmp iterateCRTCLoop;
-			}
-		}
-		inc monitorCurrent;
-	}
-	averageBrightness = average * 100 / brightnessCounter;
-	ret;
-
-
-
+	ret y;
 }
 
 
@@ -1296,26 +1622,11 @@ SETBRIGHTNESS(){
 
 
 
-#ifdef a
-		intermediateData = malloc(width * height * sizeof(uint32));
-		data             = malloc(width * height * sizeof(uint32));
+#define COPYMEMORY() /*-*/ local void copyMemory(void *const sourceStart, void *const destinationStart, const uint byteAmount)
 
-		kernelColumnRStart = malloc(blurSize + 2 * width * sizeof(uint32));
-		kernelColumnGStart = malloc(blurSize + 2 * width * sizeof(uint32));
-		kernelColumnBStart = malloc(blurSize + 2 * width * sizeof(uint32));
+COPYMEMORY();
 
-		pixelRStart = malloc(blurSize + 2 * width * height * sizeof(uint32));
-		pixelGStart = malloc(blurSize + 2 * width * height * sizeof(uint32));
-		pixelBStart = malloc(blurSize + 2 * width * height * sizeof(uint32));
-#endif
-
-
-
-#define MEMORYCOPY() /*-*/ local void memoryCopy(void *sourceStart, void *destinationStart, const uint byteAmount)
-
-MEMORYCOPY();
-
-MEMORYCOPY(){
+COPYMEMORY(){
 	const uint largeAmount = byteAmount / 64;
 	const uint smallAmount = byteAmount - largeAmount * 64;
 	void *sourceCurrent = sourceStart;
@@ -1411,11 +1722,48 @@ int main(int argumentAmount, const char *const *argument){
 
 
 
+		/*! set this properly later */
+
+		{
+			uint width = 1000;
+			uint height = 1000;
+			uint blurSize = 1000;
+
+			intermediateData = malloc(width * height * sizeof(uint32));
+			data             = malloc(width * height * sizeof(uint32));
+
+			kernelColumnRStart = malloc(blurSize + 2 * width * sizeof(uint32));
+			kernelColumnGStart = malloc(blurSize + 2 * width * sizeof(uint32));
+			kernelColumnBStart = malloc(blurSize + 2 * width * sizeof(uint32));
+
+			pixelRStart = malloc(blurSize + 2 * width * height * sizeof(uint32));
+			pixelGStart = malloc(blurSize + 2 * width * height * sizeof(uint32));
+			pixelBStart = malloc(blurSize + 2 * width * height * sizeof(uint32));
+		}
+
+
+
 		if(pthread_mutex_init(&sleepMutex, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
 			printTitledError("pthread error", "could not init sleep mutex");
 		}
 		if(pthread_cond_init(&sleepCond, NULL) != PTHREAD_COND_INIT_SUCCESS){
 			printTitledError("pthread error", "could not init sleep cond");
+		}
+
+
+
+		/*! destroy this later */
+
+		if(pthread_mutex_init(&globalsMutex, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
+			printTitledError("pthread error", "could not init globals mutex");
+		}
+
+
+
+		/*! destroy this later */
+
+		if(pthread_mutex_init(&brightnessMutex, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
+			printTitledError("pthread error", "could not init brightness mutex");
 		}
 
 
@@ -2012,9 +2360,11 @@ int main(int argumentAmount, const char *const *argument){
 				(*monitorCurrent).w = w;
 				(*monitorCurrent).h = h;
 				(*monitorCurrent).window = window;
-				(*monitorCurrent).pixmap = 0;
+				(*monitorCurrent).pixmap = xcb_generate_id(connection);
 				(*monitorCurrent).gc = xcb_generate_id(connection);
 				(*monitorCurrent).windowMapped = false;
+				(*monitorCurrent).previousBrightness = -1;
+				(*monitorCurrent).brightness = -1;
 
 
 
@@ -2088,7 +2438,15 @@ int main(int argumentAmount, const char *const *argument){
 					}
 				}
 				xcb_create_window(connection, depth, window, (*screen).root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP, &valueList);
-				xcb_create_gc(connection, (*monitorCurrent).gc, window, XCB_NONE, NULL);
+				xcb_create_pixmap(connection, depth, (*monitorCurrent).pixmap, window, 1, 1);
+				xcb_create_gc(connection, (*monitorCurrent).gc, (*monitorCurrent).pixmap, XCB_NONE, NULL);
+
+
+
+				xcb_change_window_attributes(connection, window, XCB_CW_BACK_PIXMAP, &(*monitorCurrent).pixmap);
+
+
+
 				if(pthread_mutex_init(&(*monitorCurrent).windowMutex, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
 					printTitledError("pthread error", "could not init window mutex");
 				}
@@ -2152,6 +2510,7 @@ int main(int argumentAmount, const char *const *argument){
 			}
 			free(reply);
 			popPointer(replyToken);
+			getMonitorGamma();
 			jmp trimMonitorMemory;
 		}
 		trimMonitorMemory:{
@@ -2248,11 +2607,10 @@ int main(int argumentAmount, const char *const *argument){
 		acceptingShared = true;
 		event = xcb_wait_for_event(connection);
 		eventToken = pushPointer(event, "event pointer", iFree);
+		acceptingShared = false;
 		if(event){
-			acceptingShared = false;
 			jmp switchEvent;
 		}
-		acceptingShared = false;
 		if(xcb_connection_has_error(connection)){
 			printConnectionError();
 			jmp mainEmergencyExit;
@@ -2381,6 +2739,11 @@ int main(int argumentAmount, const char *const *argument){
 	}
 	exposeEvent:{
 		#define e /*-*/ ((xcb_expose_event_t *)event)
+
+
+
+		/*! mapNotify or expose? */
+
 		const xcb_window_t eventWindow = (*e).window;
 		Monitor *current = monitorStart;
 		Monitor *const wall = current + monitorAllocated;
@@ -2448,14 +2811,15 @@ int main(int argumentAmount, const char *const *argument){
 	switchCommand:{
 		printCommand();
 		switch (*eventModifierNode).command over
-			to NONE_COMMAND: /*------------*/ jmp noneCommand;
-			to EXECUTE_COMMAND: /*---------*/ jmp executeCommand;
-			to BRIGHTNESS_UP_COMMAND: /*---*/ jmp brightnessUpCommand;
-			to BRIGHTNESS_DOWN_COMMAND: /*-*/ jmp brightnessDownCommand;
-			to SHOW_WINDOW_COMMAND: /*-----*/ jmp showWindowCommand;
-			to RESTART_COMMAND: /*---------*/ jmp restartCommand;
-			to EXIT_COMMAND: /*------------*/ jmp exitCommand;
-			off: /*------------------------*/ jmp unrecognizedCommand;
+			to NONE_COMMAND: /*----------------*/ jmp noneCommand;
+			to EXECUTE_COMMAND: /*-------------*/ jmp executeCommand;
+			to SET_BRIGHTNESS_COMMAND: /*------*/ jmp setBrightnessCommand;
+			to INCREASE_BRIGHTNESS_COMMAND: /*-*/ jmp increaseBrightnessCommand;
+			to DECREASE_BRIGHTNESS_COMMAND: /*-*/ jmp decreaseBrightnessCommand;
+			to SHOW_WINDOW_COMMAND: /*---------*/ jmp showWindowCommand;
+			to RESTART_COMMAND: /*-------------*/ jmp restartCommand;
+			to EXIT_COMMAND: /*----------------*/ jmp exitCommand;
+			off: /*----------------------------*/ jmp unrecognizedCommand;
 		end
 	}
 	noneCommand:{
@@ -2465,16 +2829,22 @@ int main(int argumentAmount, const char *const *argument){
 		exec((*eventModifierNode).string);
 		jmp eventLoopCheckShortcuts;
 	}
-	brightnessUpCommand:{
-		oldAverageBrightness = averageBrightness;
-		getMonitorGamma();
-		setBrightness((*eventModifierNode).field0, true);
+	setBrightnessCommand:{
+		if(getMonitorGamma()){
+			setMonitorGamma((*eventModifierNode).field0, SET_BRIGHTNESS_OPERATION);
+		}
 		jmp eventLoopCheckShortcuts;
 	}
-	brightnessDownCommand:{
-		oldAverageBrightness = averageBrightness;
-		getMonitorGamma();
-		setBrightness((*eventModifierNode).field0, false);
+	increaseBrightnessCommand:{
+		if(getMonitorGamma()){
+			setMonitorGamma((*eventModifierNode).field0, INCREASE_BRIGHTNESS_OPERATION);
+		}
+		jmp eventLoopCheckShortcuts;
+	}
+	decreaseBrightnessCommand:{
+		if(getMonitorGamma()){
+			setMonitorGamma((*eventModifierNode).field0, DECREASE_BRIGHTNESS_OPERATION);
+		}
 		jmp eventLoopCheckShortcuts;
 	}
 	showWindowCommand:{
@@ -2493,27 +2863,17 @@ int main(int argumentAmount, const char *const *argument){
 			to POINTER_WHICH_MONITOR:{
 				current = getPointerMonitor();
 				wall = current + 1;
-
-
-
-				/*! oldAverageBrightness = averageBrightness; */
-
-
-
-				getMonitorGamma();
+				if(!getMonitorGamma()){
+					jmp eventLoop;
+				}
 				jmp mapWindowLoop;
 			}
 			to ALL_WHICH_MONITOR:{
 				current = monitorStart;
 				wall = current + monitorAllocated;
-
-
-
-				/*! oldAverageBrightness = averageBrightness; */
-
-
-
-				getMonitorGamma();
+				if(!getMonitorGamma()){
+					jmp eventLoop;
+				}
 				jmp mapWindowLoop;
 			}
 			off:{
@@ -2540,7 +2900,21 @@ int main(int argumentAmount, const char *const *argument){
 				valueList.h = height;
 				xcb_configure_window(connection, (*current).window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_STACK_MODE, &valueList);
 				xcb_change_property(connection, XCB_PROP_MODE_REPLACE, (*current).window, atom._NET_WM_USER_TIME, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &timestamp);
+
+
+
+				/*! something to consider: maybe we should use a mutex here. */
+
+				if(!(*current).windowMapped){
+					drawWindow(current);
+				}
+
+
+
 				xcb_map_window(connection, (*current).window);
+
+
+
 				(*current).windowMapped = true;
 				inc current;
 				jmp mapWindowLoop;
@@ -2975,12 +3349,12 @@ SLEEPMAIN(){
 	(void)arg;
 	jmp setThreadCancelationInformation;
 	setThreadCancelationInformation:{
-		int oldState;
-		int oldType;
-		if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &oldState) != PTHREAD_SETCANCELSTATE_SUCCESS){
+		int previousState;
+		int previousType;
+		if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &previousState) != PTHREAD_SETCANCELSTATE_SUCCESS){
 			printTitledError("pthread error", "could not set cancel state of sleep thread");
 		}
-		if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &oldType) != PTHREAD_SETCANCELTYPE_SUCCESS){
+		if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &previousType) != PTHREAD_SETCANCELTYPE_SUCCESS){
 			printTitledError("pthread error", "could not set cancel type of sleep thread");
 		}
 		jmp waitIndefinitely;
@@ -2993,7 +3367,7 @@ SLEEPMAIN(){
 			printTitledError("pthread error", "could not wait sleep mutex");
 		}
 		if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-			printTitledError("pthread error", "could not lock sleep mutex");
+			printTitledError("pthread error", "could not unlock sleep mutex");
 		}
 		jmp waitUntilTimedOut;
 	}
@@ -3001,11 +3375,11 @@ SLEEPMAIN(){
 		struct timespec ts;
 		int waitReturn;
 		clock_gettime(CLOCK_REALTIME, &ts);
-		ts.tv_sec += seconds;
-		ts.tv_nsec += nanoseconds;
 		if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock sleep mutex");
 		}
+		ts.tv_sec += seconds;
+		ts.tv_nsec += nanoseconds;
 		waitReturn = pthread_cond_timedwait(&sleepCond, &sleepMutex, &ts);
 		if(waitReturn != ETIMEDOUT and waitReturn != PTHREAD_COND_TIMEDWAIT_SUCCESS){
 			printTitledError("pthread error", "could not wait sleep mutex");
@@ -3047,12 +3421,12 @@ DRAWWINDOWMAIN(){
 	Monitor *const monitor = arg;
 	jmp setThreadCancelationInformation;
 	setThreadCancelationInformation:{
-		int oldState;
-		int oldType;
-		if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &oldState) != PTHREAD_SETCANCELSTATE_SUCCESS){
+		int previousState;
+		int previousType;
+		if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &previousState) != PTHREAD_SETCANCELSTATE_SUCCESS){
 			printTitledError("pthread error", "could not set cancel state of window thread");
 		}
-		if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &oldType) != PTHREAD_SETCANCELTYPE_SUCCESS){
+		if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &previousType) != PTHREAD_SETCANCELTYPE_SUCCESS){
 			printTitledError("pthread error", "could not set cancel type of window thread");
 		}
 		jmp waitIndefinitely;
@@ -3065,13 +3439,13 @@ DRAWWINDOWMAIN(){
 			printTitledError("pthread error", "could not wait window mutex");
 		}
 		if(pthread_mutex_unlock(&(*monitor).windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-			printTitledError("pthread error", "could not lock window mutex");
+			printTitledError("pthread error", "could not unlock window mutex");
 		}
 		jmp waitUntilTimedOut;
 	}
 	waitUntilTimedOut:{
 		if((*monitor).windowMapped){
-			drawWindow(monitor, (*monitor).window);
+			drawWindow(monitor);
 			jmp waitUntilTimedOut;
 		}
 		jmp waitIndefinitely;
@@ -3082,11 +3456,9 @@ DRAWWINDOW(){
 
 
 
+	/*! what if the monitors change while in here? use a mutex. */
+
 	/*! what if images point to NULL? remove all image setting instructions from .conf and test */
-
-
-
-	/*! should this be kept but also create an initial frame as a background pixmap? */
 
 	/*! what happens should the above pixels be not part of the screen */
 
@@ -3104,7 +3476,7 @@ DRAWWINDOW(){
 		int yUsed;
 		image.width = width;
 		image.height = height;
-		image.size = width * height * 4;
+		image.size = width * height * sizeof(uint32);
 		switch horizontalAlignment over
 			to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ xUsed = (*monitor).leftX; /*------------------------------*/ brk;
 			to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ xUsed = (*monitor).leftX + ((*monitor).w - width) / 2; /*-*/ brk;
@@ -3151,6 +3523,8 @@ DRAWWINDOW(){
 
 
 
+		free(image.data);
+		popPointer(image.dataToken);
 		copyImage(&commonUnderlayImage, &image);
 
 
@@ -3169,36 +3543,50 @@ DRAWWINDOW(){
 
 
 		/*!
-			the images are in some kind of fight for dominance to show up first.
+			take an average of every crtc's brightness and consider it as _the_ monitor brightness.
+
+			as for the old brightness setting, we could have a per-monitor variable for it. we can maybe store the current brightness there too.
+		*/
+
+		uint brightness = (*monitor).brightness;
+		uint previousBrightness = (*monitor).previousBrightness;
+
+
+
+		/*!
+			use the brightness mutex, or make new mutexes for each monitor, here to store the brightness locally to use.
 		*/
 
 
 
-		if(averageBrightness == oldAverageBrightness){
-			destination = &unchangedBrightnessImage;
-		}elif(averageBrightness > oldAverageBrightness){
+		if(brightness > previousBrightness){
 			destination = &increasedBrightnessImage;
-		}else{
+		}elif(brightness < previousBrightness){
 			destination = &decreasedBrightnessImage;
+		}else{
+			destination = &unchangedBrightnessImage;
 		}
 		compositeImages(&compositeImagesOver, 0, 0, destination, 0, 0, &image);
+
+
+
+		/*! how is this requested by the user */
+
+/*!
+		if(commonOverlayImage.data){
+			const uint largePercentage = (100 - localBrightness) * commonOverlayImage.height / 100;
+			compositeImages(&compositeImagesOver, 0, largePercentage, &commonOverlayImage, 0, (image.height - commonOverlayImage.height) / 2 + largePercentage, &image);
+		}
+*/
 	}
 
 
 
-	/*! how is this requested by the user */
-
-	if(commonOverlayImage.data){
-		const uint largePercentage = (100 - averageBrightness) * commonOverlayImage.height / 100;
-		compositeImages(&compositeImagesOver, 0, largePercentage, &commonOverlayImage, 0, (image.height - commonOverlayImage.height) / 2 + largePercentage, &image);
+	xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, (*monitor).pixmap, (*monitor).gc, width, height, 0, 0, 0, depth, image.size, (void *)image.data);
+	if((*monitor).windowMapped){
+		xcb_clear_area(connection, false, (*monitor).window, 0, 0, 0, 0);
 	}
-
-
-
-	if(drawable == (*monitor).pixmap or (drawable == (*monitor).window and (*monitor).windowMapped)){
-		xcb_put_image(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, drawable, (*monitor).gc, width, height, 0, 0, 0, depth, image.size, (void *)image.data);
-		xcb_flush(connection);
-	}
+	xcb_flush(connection);
 	if(image.dataToken){
 		free(image.data);
 		popPointer(image.dataToken);
@@ -4473,10 +4861,11 @@ READCONFIG(){
 	endOfInstruction:{
 		if(instructionStart == doInstruction){
 			switch name0Return over
-				to EXECUTE_COMMAND: /*---------*/ instructionStart = executeDoSubinstruction; /*--------*/ instructionDataStart = executeDoSubinstructionData; /*--------*/ jmp assessSubinstruction;
-				to BRIGHTNESS_UP_COMMAND: /*---*/ instructionStart = brightnessUpDoSubinstruction; /*---*/ instructionDataStart = brightnessUpDoSubinstructionData; /*---*/ jmp assessSubinstruction;
-				to BRIGHTNESS_DOWN_COMMAND: /*-*/ instructionStart = brightnessDownDoSubinstruction; /*-*/ instructionDataStart = brightnessDownDoSubinstructionData; /*-*/ jmp assessSubinstruction;
-				off: /*------------------------*/ /*----------------------------------------------------*/ /*------------------------------------------------------------*/ brk;
+				to EXECUTE_COMMAND: /*-------------*/ instructionStart = executeDoSubinstruction; /*------------*/ instructionDataStart = executeDoSubinstructionData; /*------------*/ jmp assessSubinstruction;
+				to SET_BRIGHTNESS_COMMAND: /*------*/ instructionStart = setBrightnessDoSubinstruction; /*------*/ instructionDataStart = setBrightnessDoSubinstructionData; /*------*/ jmp assessSubinstruction;
+				to INCREASE_BRIGHTNESS_COMMAND: /*-*/ instructionStart = increaseBrightnessDoSubinstruction; /*-*/ instructionDataStart = increaseBrightnessDoSubinstructionData; /*-*/ jmp assessSubinstruction;
+				to DECREASE_BRIGHTNESS_COMMAND: /*-*/ instructionStart = decreaseBrightnessDoSubinstruction; /*-*/ instructionDataStart = decreaseBrightnessDoSubinstructionData; /*-*/ jmp assessSubinstruction;
+				off: /*----------------------------*/ /*--------------------------------------------------------*/ /*----------------------------------------------------------------*/ brk;
 			}
 		}
 		if(instructionStart == setInstruction){
@@ -4505,18 +4894,20 @@ READCONFIG(){
 		}
 		if(instructionStart == grabKeycodeInstruction){
 			switch name0Return over
-				to EXECUTE_COMMAND: /*---------*/ instructionStart = executeGrabKeycodeSubinstruction; /*--------*/ instructionDataStart = executeGrabKeycodeSubinstructionData; /*--------*/ jmp assessSubinstruction;
-				to BRIGHTNESS_UP_COMMAND: /*---*/ instructionStart = brightnessUpGrabKeycodeSubinstruction; /*---*/ instructionDataStart = brightnessUpGrabKeycodeSubinstructionData; /*---*/ jmp assessSubinstruction;
-				to BRIGHTNESS_DOWN_COMMAND: /*-*/ instructionStart = brightnessDownGrabKeycodeSubinstruction; /*-*/ instructionDataStart = brightnessDownGrabKeycodeSubinstructionData; /*-*/ jmp assessSubinstruction;
-				off: /*------------------------*/ /*-------------------------------------------------------------*/ /*---------------------------------------------------------------------*/ brk;
+				to EXECUTE_COMMAND: /*-------------*/ instructionStart = executeGrabKeycodeSubinstruction; /*------------*/ instructionDataStart = executeGrabKeycodeSubinstructionData; /*------------*/ jmp assessSubinstruction;
+				to SET_BRIGHTNESS_COMMAND: /*------*/ instructionStart = setBrightnessGrabKeycodeSubinstruction; /*------*/ instructionDataStart = setBrightnessGrabKeycodeSubinstructionData; /*------*/ jmp assessSubinstruction;
+				to INCREASE_BRIGHTNESS_COMMAND: /*-*/ instructionStart = increaseBrightnessGrabKeycodeSubinstruction; /*-*/ instructionDataStart = increaseBrightnessGrabKeycodeSubinstructionData; /*-*/ jmp assessSubinstruction;
+				to DECREASE_BRIGHTNESS_COMMAND: /*-*/ instructionStart = decreaseBrightnessGrabKeycodeSubinstruction; /*-*/ instructionDataStart = decreaseBrightnessGrabKeycodeSubinstructionData; /*-*/ jmp assessSubinstruction;
+				off: /*----------------------------*/ /*-----------------------------------------------------------------*/ /*-------------------------------------------------------------------------*/ brk;
 			}
 		}
 		if(instructionStart == grabButtonInstruction){
 			switch name0Return over
-				to EXECUTE_COMMAND: /*---------*/ instructionStart = executeGrabButtonSubinstruction; /*--------*/ instructionDataStart = executeGrabButtonSubinstructionData; /*--------*/ jmp assessSubinstruction;
-				to BRIGHTNESS_UP_COMMAND: /*---*/ instructionStart = brightnessUpGrabButtonSubinstruction; /*---*/ instructionDataStart = brightnessUpGrabButtonSubinstructionData; /*---*/ jmp assessSubinstruction;
-				to BRIGHTNESS_DOWN_COMMAND: /*-*/ instructionStart = brightnessDownGrabButtonSubinstruction; /*-*/ instructionDataStart = brightnessDownGrabButtonSubinstructionData; /*-*/ jmp assessSubinstruction;
-				off: /*------------------------*/ /*------------------------------------------------------------*/ /*--------------------------------------------------------------------*/ brk;
+				to EXECUTE_COMMAND: /*-------------*/ instructionStart = executeGrabButtonSubinstruction; /*------------*/ instructionDataStart = executeGrabButtonSubinstructionData; /*------------*/ jmp assessSubinstruction;
+				to SET_BRIGHTNESS_COMMAND: /*------*/ instructionStart = setBrightnessGrabButtonSubinstruction; /*------*/ instructionDataStart = setBrightnessGrabButtonSubinstructionData; /*------*/ jmp assessSubinstruction;
+				to INCREASE_BRIGHTNESS_COMMAND: /*-*/ instructionStart = increaseBrightnessGrabButtonSubinstruction; /*-*/ instructionDataStart = increaseBrightnessGrabButtonSubinstructionData; /*-*/ jmp assessSubinstruction;
+				to DECREASE_BRIGHTNESS_COMMAND: /*-*/ instructionStart = decreaseBrightnessGrabButtonSubinstruction; /*-*/ instructionDataStart = decreaseBrightnessGrabButtonSubinstructionData; /*-*/ jmp assessSubinstruction;
+				off: /*---------------------------*/ /*-----------------------------------------------------------------*/ /*------------------------------------------------------------------------*/ brk;
 			}
 		}
 		if(statementCurrent < statementWall){
@@ -4541,53 +4932,106 @@ READCONFIG(){
 					exec(execute0Return);
 					jmp getStatementStart;
 				}
-				to BRIGHTNESS_UP_COMMAND:{
+				to SET_BRIGHTNESS_COMMAND:{
+					/*!*/
 					jmp printDoSubinstructionNotImplemented;
 				}
-				to BRIGHTNESS_DOWN_COMMAND:{
+				to INCREASE_BRIGHTNESS_COMMAND:{
+					/*!*/
+					jmp printDoSubinstructionNotImplemented;
+				}
+				to DECREASE_BRIGHTNESS_COMMAND:{
+					/*!*/
+					jmp printDoSubinstructionNotImplemented;
+				}
+				to SHOW_WINDOW_COMMAND:{
+					/*!*/
+					jmp printDoSubinstructionNotImplemented;
+				}
+				to RESTART_COMMAND:{
+					/*!*/
+					jmp printDoSubinstructionNotImplemented;
+				}
+				to EXIT_COMMAND:{
+					/*!*/
 					jmp printDoSubinstructionNotImplemented;
 				}
 				off:{
 					jmp getStatementStart;
 				}
 			end
+			jmp printDoSubinstructionNotImplemented;
 			printDoSubinstructionNotImplemented:{
 				printConfigError("config error", "do subinstruction not implemented yet", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, instructionStart, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 				jmp getStatementStart;
-				jmp printDoSubinstructionNotImplemented;
 			}
 		}
 		if(instructionStartCopy == setInstruction){
-
-
-
-			/*! remember that some of these might not need be globals and instead must be applied where they must be applied directly */
-
-
-
 			switch name0Return over
 				to X_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					x = integer0Return;
+					resetPosition();
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					jmp getStatementStart;
 				}
 				to Y_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					y = integer0Return;
+					resetPosition();
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					jmp getStatementStart;
 				}
 				to X_OFFSET_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					xOffset = integer0Return;
+					resetPosition();
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					jmp getStatementStart;
 				}
 				to Y_OFFSET_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					yOffset = integer0Return;
+					resetPosition();
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					jmp getStatementStart;
 				}
 				to HORIZONTAL_ALIGNMENT_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					horizontalAlignment = name1Return;
+					resetPosition();
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					jmp getStatementStart;
 				}
 				to VERTICAL_ALIGNMENT_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					verticalAlignment = name1Return;
+					resetPosition();
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					jmp getStatementStart;
 				}
 				to WIDTH_VARIABLE:{
@@ -4595,7 +5039,14 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					width = integer0Return;
+					resetSize();
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					jmp getStatementStart;
 				}
 				to HEIGHT_VARIABLE:{
@@ -4603,53 +5054,177 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					height = integer0Return;
+					resetSize();
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					jmp getStatementStart;
 				}
 				to WHICH_MONITOR_UPDATES_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					whichMonitorUpdates = name1Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
+
+
+
+					/*! what do i do here? */
+
+
+
 					jmp getStatementStart;
 				}
 				to WHICH_MONITOR_SHOWS_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					whichMonitorShows = name1Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
+
+
+
+					/*! what do i do here? */
+
+
+
 					jmp getStatementStart;
 				}
 				to FOREGROUND_COLOR_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					foregroundColor = integer0Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
+
+
+
+					/*! unused variable */
+
+
+
 					jmp getStatementStart;
 				}
 				to BACKGROUND_COLOR_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					backgroundColor = integer0Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
+
+
+
+					/*! unused variable */
+
+
+
 					jmp getStatementStart;
 				}
 				to UNCHANGED_BRIGHTNESS_IMAGE_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					unchangedBrightnessImage = image0Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
+
+
+
+					/*! what do i do here? */
+
+
+
 					jmp getStatementStart;
 				}
 				to INCREASED_BRIGHTNESS_IMAGE_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					increasedBrightnessImage = image0Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
+
+
+
+					/*! what do i do here? */
+
+
+
 					jmp getStatementStart;
 				}
 				to DECREASED_BRIGHTNESS_IMAGE_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					decreasedBrightnessImage = image0Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
+
+
+
+					/*! what do i do here? */
+
+
+
 					jmp getStatementStart;
 				}
 				to COMMON_OVERLAY_IMAGE_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					commonOverlayImage = image0Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
+
+
+
+					/*! what do i do here? */
+
+
+
 					jmp getStatementStart;
 				}
 				to COMMON_UNDERLAY_IMAGE_VARIABLE:{
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					commonUnderlayImage = image0Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
+
+
+
+					/*! what do i do here? */
+
+
+
 					jmp getStatementStart;
 				}
 				to BLUR_SIZE_VARIABLE:{
@@ -4661,7 +5236,20 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not even", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
+					if(pthread_mutex_lock(&globalsMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					blurSize = integer0Return;
+					if(pthread_mutex_unlock(&globalsMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock globals mutex");
+					}
+
+
+
+					/*! what do i do here? */
+
+
+
 					jmp getStatementStart;
 				}
 				to DURATION_VARIABLE:{
@@ -4669,8 +5257,14 @@ READCONFIG(){
 						printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 						jmp getStatementStart;
 					}
+					if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+						printTitledError("pthread error", "could not lock sleep mutex");
+					}
 					seconds = integer0Return / 1000;
 					nanoseconds = (integer0Return - seconds * 1000) * 1000000;
+					if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+						printTitledError("pthread error", "could not unlock sleep mutex");
+					}
 					jmp getStatementStart;
 				}
 				off:{
@@ -4697,6 +5291,8 @@ READCONFIG(){
 				to COMMON_UNDERLAY_IMAGE_IMAGE_VARIABLE: /*------*/ destination = &commonUnderlayImage; /*------*/ brk;
 				off: /*------------------------------------------*/ /*------------------------------------------*/ jmp getStatementStart;
 			end
+			free((*destination).data);
+			popPointer((*destination).dataToken);
 			copyImage(source, destination);
 			jmp getStatementStart;
 		}
@@ -4725,7 +5321,7 @@ READCONFIG(){
 			uint8 field2 = 0;
 			uint8 field3 = 0;
 			uint8 field4 = 0;
-			if(instructionStart == brightnessUpGrabKeycodeSubinstruction or instructionStart == brightnessDownGrabKeycodeSubinstruction){
+			if(instructionStart == setBrightnessGrabKeycodeSubinstruction or instructionStart == increaseBrightnessGrabKeycodeSubinstruction or instructionStart == decreaseBrightnessGrabKeycodeSubinstruction){
 				if(integer1Return < 0){
 					printConfigError("integer domain error", "integer is not in [0, +infinity)", ';', true, true, true, false, configPath, statementLine, statementStart, statementWall, instructionStart, integer0Instruction, instructionDataStart, currentScopeInstructionList, currentScopeInstructionRoot);
 					jmp getStatementStart;
@@ -4781,7 +5377,7 @@ READCONFIG(){
 			uint8 field2 = 0;
 			uint8 field3 = 0;
 			uint8 field4 = 0;
-			if(instructionStart == brightnessUpGrabButtonSubinstruction or instructionStart == brightnessDownGrabButtonSubinstruction){
+			if(instructionStart == setBrightnessGrabButtonSubinstruction or instructionStart == increaseBrightnessGrabButtonSubinstruction or instructionStart == decreaseBrightnessGrabButtonSubinstruction){
 				field0 = integer1Return;
 			}
 			if(!insertShortcut(&buttonShortcut, integer0Return, nameList0Return, name0Return, execute0Return, execute0Token, field0, field1, field2, field3, field4)){
@@ -5807,7 +6403,7 @@ READIMAGE(){
 		}
 		(*image).width = width;
 		(*image).height = height;
-		(*image).size = width * height * 4;
+		(*image).size = width * height * sizeof(uint32);
 		data = malloc((*image).size * sizeof(uint8));
 		dataToken = pushPointer(data, "image data pointer", iFree);
 		if(!data){
@@ -5958,20 +6554,12 @@ COPYIMAGE(){
 		printTitledError("memory allocation error", "could not allocate memory for new image");
 		ret;
 	}
-	free((*destination).data);
-	popPointer((*destination).dataToken);
-
-
-
 	(*destination).data = dataStart;
 	(*destination).dataToken = dataToken;
 	(*destination).size = (*source).size;
 	(*destination).width = (*source).width;
 	(*destination).height = (*source).height;
-	memoryCopy((*source).data, (*destination).data, (*destination).size);
-
-
-
+	copyMemory((*source).data, (*destination).data, (*destination).size);
 	ret;
 }
 COMPOSITEIMAGES(){
@@ -6083,7 +6671,7 @@ FREEMONITORS(){
 			}
 			freeCRTCDataLoop:{
 				if(crtcCurrent < crtcWall){
-					free((*crtcCurrent).data);
+					free((*crtcCurrent).dataStart);
 					popPointer((*crtcCurrent).dataToken);
 					inc crtcCurrent;
 					jmp freeCRTCDataLoop;
@@ -6093,7 +6681,7 @@ FREEMONITORS(){
 				jmp freeXObjects;
 			}
 			freeXObjects:{
-				xcb_free_pixmap(connection, (*current).gc);
+				xcb_free_gc(connection, (*current).gc);
 				xcb_free_pixmap(connection, (*current).pixmap);
 				xcb_destroy_window(connection, (*current).window);
 				inc current;
