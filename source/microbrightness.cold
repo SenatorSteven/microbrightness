@@ -60,10 +60,6 @@
 */
 
 /*!
-	institute instruction to execute program commands instead of system commands. or maybe make those commands instructions unto themselves
-*/
-
-/*!
 	how to control how the final overlay is done? maybe ask microsound?
 */
 
@@ -418,6 +414,12 @@ SOFTWARE. */
 		pthread_t /*-----------*/ windowThread;
 		pthread_mutex_t /*-----*/ windowMutex;
 		pthread_cond_t /*------*/ windowCond;
+
+
+
+		uint32 * /*------------*/ dataStart;
+		uint32 /*--------------*/ dataToken;
+		uint8 /*---------------*/ pad1[4];
 
 
 
@@ -1142,6 +1144,13 @@ RESETSIZE(){
 	jmp loop;
 	loop:{
 		if(current < wall){
+			void *const temp = realloc((*current).dataStart, valueList.w * valueList.h * sizeof(uint32));
+			updatePointer((*current).dataToken, temp);
+			if(!(*current).dataToken){
+				printTitledError("memory allocation error", "could not allocate memory for window color data");
+			}else{
+				(*current).dataStart = temp;
+			}
 			xcb_free_gc(connection, (*current).gc);
 			xcb_free_pixmap(connection, (*current).pixmap);
 			(*current).pixmap = xcb_generate_id(connection);
@@ -2365,6 +2374,11 @@ int main(int argumentAmount, const char *const *argument){
 				(*monitorCurrent).windowMapped = false;
 				(*monitorCurrent).previousBrightness = -1;
 				(*monitorCurrent).brightness = -1;
+				(*monitorCurrent).dataStart = malloc(1 * sizeof(uint32));
+				(*monitorCurrent).dataToken = pushPointer((*monitorCurrent).dataStart, "window color data pointer", iFree);
+				if(!(*monitorCurrent).dataToken){
+					printTitledError("memory allocation error", "could not allocate memory for window color data");
+				}
 
 
 
@@ -2379,7 +2393,7 @@ int main(int argumentAmount, const char *const *argument){
 				hints.input = false;
 				hints.initialState = NORMAL_STATE;
 				if(gethostname(hostname, countof(hostname)) != GETHOSTNAME_SUCCESS){
-					printTitledError("gethostname() error", "could not get hostname");
+					printTitledError("get hostname error", "could not get hostname");
 				}
 				*(state + 0) = atom._NET_WM_STATE_STICKY;
 				*(state + 1) = atom._NET_WM_STATE_SKIP_TASKBAR;
