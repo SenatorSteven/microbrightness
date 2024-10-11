@@ -3165,9 +3165,11 @@ DRAWWINDOWMAIN(){
 		jmp waitIndefinitely;
 	}
 	waitIndefinitely:{
+/*!
 		if(pthread_rwlock_rdlock(&globalsLock) != PTHREAD_RWLOCK_RDLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals read lock");
 		}
+*/
 		if(pthread_mutex_lock(&(*monitor).windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock window mutex");
 		}
@@ -3177,9 +3179,11 @@ DRAWWINDOWMAIN(){
 		if(pthread_mutex_unlock(&(*monitor).windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock window mutex");
 		}
+/*!
 		if(pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals read lock");
 		}
+*/
 
 
 
@@ -3317,16 +3321,24 @@ DRAWWINDOW(){
 
 
 	{
-		Image *operationImage;
+		Image *operationImage = &unchangedBrightnessImage;
 		uint brightness = (*monitor).brightness;
 		uint previousBrightness = (*monitor).previousBrightness;
-		if(brightness > previousBrightness){
-			operationImage = &increasedBrightnessImage;
-		}elif(brightness < previousBrightness){
-			operationImage = &decreasedBrightnessImage;
-		}else{
-			operationImage = &unchangedBrightnessImage;
+
+
+
+		/*! causes stuttering */
+
+		if(brightnessLock){
+			if(brightness > previousBrightness){
+				operationImage = &increasedBrightnessImage;
+			}elif(brightness < previousBrightness){
+				operationImage = &decreasedBrightnessImage;
+			}
 		}
+
+
+
 		compositeImages(&compositeImagesOver, 0, 0, operationImage, 0, 0, &image);
 		if(commonOverlayImage.data){
 			const uint percentage = (100 - brightness) * commonOverlayImage.height / 100;
