@@ -6,10 +6,6 @@
 */
 
 /*!
-	what happens should mutexes and conditions fail?
-*/
-
-/*!
 	what if the monitor amount changes on randr event? shouldn't we destroy the existing threads and effectively stop showing the window? but to stop showing the window is to ruin the experience.
 */
 
@@ -20,35 +16,17 @@
 */
 
 /*!
-	what if the monitor setup changes? do the alpha settings automatically reset themselves or do we have to fix them?
+	when monitors update, set the amount of time left on the sleep thread clock and put the thread to either pause or wait indefinitely and use the remaining time to sleep after signaling the thread.
 */
 
 /*!
-	what happens on restart to all the threads? or on monitor update?
-*/
-
-/*!
-	consider renaming copyImage() to createImageFrom() and using the idea of copying image differently.
-*/
-
-/*!
-	showing the window without changing the volume interferes with the previous up or down action and displays either a plus or a minus when it should be displaying neither.
-
-	maybe use a global that gets reset every eventLoop: and gets set on show-window or set-/increase-/decrease-brightness
+	what happens on restart to all the threads?
 */
 
 /*!
 	add mutex and cond guards to destroy them only when created.
 
 	errors about this have already come about, specifically about the sleep thread. check when the window is showing also.
-*/
-
-/*!
-	make sure that the user can't mess with the program when that is updating the monitor setup (the threads and their mutexes is the issue).
-*/
-
-/*!
-	should probably allocate the size of the window as an image to draw on.
 */
 
 /*!
@@ -163,6 +141,7 @@ SOFTWARE. */
 	#define PTHREAD_RWLOCK_WRLOCK_SUCCESS /*-------------*/ (0)
 	#define PTHREAD_RWLOCK_RDLOCK_SUCCESS /*-------------*/ (0)
 	#define PTHREAD_RWLOCK_UNLOCK_SUCCESS /*-------------*/ (0)
+	#define PTHREAD_RWLOCK_DESTROY_SUCCESS /*------------*/ (0)
 	#define PTHREAD_CANCEL_SUCCESS /*--------------------*/ (0)
 	#define PTHREAD_JOIN_SUCCESS /*----------------------*/ (0)
 
@@ -179,13 +158,14 @@ SOFTWARE. */
 	#define MESSAGE_EVENT /*-----------------------------*/ ("\x1b[32m")
 	#define MESSAGE_END /*-------------------------------*/ ("\x1b[m")
 
-	#define UNRECOGNIZED_ARGUMENT /*---------------------*/ (0)
-	#define HELP_ARGUMENT /*-----------------------------*/ (1)
-	#define STDOUT_ARGUMENT /*---------------------------*/ (2)
-	#define STDERR_ARGUMENT /*---------------------------*/ (3)
-	#define CONFIG_ARGUMENT /*---------------------------*/ (4)
-	#define ERROR_ARGUMENT /*----------------------------*/ (5)
-	#define SERVER_ARGUMENT /*---------------------------*/ (6)
+	#define NONE_ARGUMENT /*-----------------------------*/ (0)
+	#define UNRECOGNIZED_ARGUMENT /*---------------------*/ (1)
+	#define HELP_ARGUMENT /*-----------------------------*/ (2)
+	#define STDOUT_ARGUMENT /*---------------------------*/ (3)
+	#define STDERR_ARGUMENT /*---------------------------*/ (4)
+	#define CONFIG_ARGUMENT /*---------------------------*/ (5)
+	#define ERROR_ARGUMENT /*----------------------------*/ (6)
+	#define SERVER_ARGUMENT /*---------------------------*/ (7)
 
 	#define NONE_INSTRUCTION_TYPE /*---------------------*/ (b(0000000))
 	#define NAME_INSTRUCTION_TYPE /*---------------------*/ (b(0000001))
@@ -196,27 +176,30 @@ SOFTWARE. */
 	#define IMAGE_INSTRUCTION_TYPE /*--------------------*/ (b(0100000))
 	#define END_INSTRUCTION_TYPE /*----------------------*/ (b(1000000))
 
-	#define SUCCESS_NAME_LIST /*-------------------------*/ (0)
-	#define INVALID_NAME_NAME_LIST /*--------------------*/ (1)
-	#define PREMATURE_END_NAME_LIST /*-------------------*/ (2)
+	#define NONE_NAME_LIST /*----------------------------*/ (0)
+	#define SUCCESS_NAME_LIST /*-------------------------*/ (1)
+	#define INVALID_NAME_NAME_LIST /*--------------------*/ (2)
+	#define PREMATURE_END_NAME_LIST /*-------------------*/ (3)
 
-	#define VALID_NUMBER /*------------------------------*/ (0)
-	#define NON_NUMBER /*--------------------------------*/ (1)
-	#define OVERFLOWN_NUMBER /*--------------------------*/ (2)
-	#define DIVIDED_BY_ZERO_NUMBER /*--------------------*/ (3)
+	#define NONE_NUMBER /*-------------------------------*/ (0)
+	#define VALID_NUMBER_NUMBER /*-----------------------*/ (1)
+	#define NON_NUMBER_NUMBER /*-------------------------*/ (2)
+	#define OVERFLOWN_NUMBER_NUMBER /*-------------------*/ (3)
+	#define DIVIDED_BY_ZERO_NUMBER /*--------------------*/ (4)
 
-	#define CANNOT_OPEN_READ_CONFIG /*-------------------*/ (0)
-	#define CANNOT_READ_READ_CONFIG /*-------------------*/ (1)
-	#define UNSUPPORTED_FORMAT_READ_CONFIG /*------------*/ (2)
-	#define BAD_HEADER_READ_CONFIG /*--------------------*/ (3)
-	#define BAD_DEPTH_READ_CONFIG /*---------------------*/ (4)
-	#define BAD_COMPRESSION_READ_CONFIG /*---------------*/ (5)
-	#define UNSUPPORTED_HEIGHT_READ_CONFIG /*------------*/ (6)
-	#define BAD_SIZE_READ_CONFIG /*----------------------*/ (7)
-	#define FAILED_READ_CONFIG /*------------------------*/ (8)
-	#define BAD_PIXELS_READ_CONFIG /*--------------------*/ (9)
-	#define BAD_IMAGE_READ_CONFIG /*---------------------*/ (10)
-	#define SUCCESS_READ_CONFIG /*-----------------------*/ (11)
+	#define NONE_READ_CONFIG /*--------------------------*/ (0)
+	#define CANNOT_OPEN_READ_CONFIG /*-------------------*/ (1)
+	#define CANNOT_READ_READ_CONFIG /*-------------------*/ (2)
+	#define UNSUPPORTED_FORMAT_READ_CONFIG /*------------*/ (3)
+	#define BAD_HEADER_READ_CONFIG /*--------------------*/ (4)
+	#define BAD_DEPTH_READ_CONFIG /*---------------------*/ (5)
+	#define BAD_COMPRESSION_READ_CONFIG /*---------------*/ (6)
+	#define UNSUPPORTED_HEIGHT_READ_CONFIG /*------------*/ (7)
+	#define BAD_SIZE_READ_CONFIG /*----------------------*/ (8)
+	#define FAILED_READ_CONFIG /*------------------------*/ (9)
+	#define BAD_PIXELS_READ_CONFIG /*--------------------*/ (10)
+	#define BAD_IMAGE_READ_CONFIG /*---------------------*/ (11)
+	#define SUCCESS_READ_CONFIG /*-----------------------*/ (12)
 
 	#define NONE_VARIABLE /*-----------------------------*/ (0)
 	#define X_VARIABLE /*--------------------------------*/ (1)
@@ -272,6 +255,11 @@ SOFTWARE. */
 	#define SHOW_WINDOW_COMMAND /*-----------------------*/ (5)
 	#define RESTART_COMMAND /*---------------------------*/ (6)
 	#define EXIT_COMMAND /*------------------------------*/ (7)
+
+	#define NONE_BRIGHTNESS_OPERATION /*-----------------*/ (0)
+	#define SET_BRIGHTNESS_OPERATION /*------------------*/ (1)
+	#define INCREASE_BRIGHTNESS_OPERATION /*-------------*/ (2)
+	#define DECREASE_BRIGHTNESS_OPERATION /*-------------*/ (3)
 
 	#define NONE_NORMAL_HINT /*--------------------------*/ (b(0000000000))
 	#define USER_POSITION_NORMAL_HINT /*-----------------*/ (b(0000000001))
@@ -336,12 +324,18 @@ SOFTWARE. */
 	#define COPYMEMORY() /*------------------------------*/ local void             copyMemory(void *const sourceStart, void *const destinationStart, const uint byteAmount)
 	#define GETTIMESTAMP() /*----------------------------*/ local xcb_timestamp_t  getTimestamp(void)
 	#define GETPOINTERMONITOR() /*-----------------------*/ local Monitor *        getPointerMonitor(void)
-	#define COPYIMAGE() /*-------------------------------*/ local void             copyImage(Image *const source, Image *const destination)
+	#define CREATEIMAGEFROM() /*-------------------------*/ local void             createImageFrom(Image *const source, Image *const destination)
 	#define COMPOSITEIMAGES() /*-------------------------*/ local void             compositeImages(void (*const operation)(const uint32 *const, uint32 *const), const int sourceX, const int sourceY, Image *const source, const int destinationX, const int destinationY, Image *const destination)
 	#define COMPOSITEIMAGESOVER() /*---------------------*/ local void             compositeImagesOver(const uint32 *const source, uint32 *const destination)
 	#define COMPOSITEIMAGESAND() /*----------------------*/ local void             compositeImagesAnd(const uint32 *const source, uint32 *const destination)
 	#define TWOPASSBOXBLUR() /*--------------------------*/ local void             twoPassBoxBlur(const int width, const int height, const int boxSize, uint32 *destinationData)
+	#define GETMONITORGAMMA() /*-------------------------*/ local bool             getMonitorGamma(void)
+	#define FINDLASTNONCLAMPED() /*----------------------*/ local uint             findLastNonClamped(const uint16 *current, const int size)
+	#define ROUNDDOUBLE() /*-----------------------------*/ local double           roundDouble(double number)
+	#define SETMONITORGAMMA() /*-------------------------*/ local void             setMonitorGamma(const int newBrightness, const uint8 operation, const bool changeGamma)
+	#define MIN() /*-------------------------------------*/ local double           min(const double x, const double y)
 	#define CANCELTHREADS() /*---------------------------*/ local void             cancelThreads(void)
+	#define FREEMONITORS() /*----------------------------*/ local void             freeMonitors(void)
 	#define CLEANUP() /*---------------------------------*/ local void             cleanup(void)
 	#define PRINTUNACCOUNTEDFORPOINTERS() /*-------------*/ local void             printUnaccountedForPointers(const Pointer *current, const Pointer *wall)
 	#define PRINTERROR() /*------------------------------*/ local void             printError(const char *const message, ...)
@@ -349,7 +343,7 @@ SOFTWARE. */
 	#define PRINTTITLEDQUOTEDERROR() /*------------------*/ local void             printTitledQuotedError(const char *const title, const char *const argument, const char *const message)
 	#define PRINTCONNECTIONERROR() /*--------------------*/ local void             printConnectionError(void)
 	#define PRINTTITLEDNAMEDERROR() /*-------------------*/ local void             printTitledNamedError(const char *const title, const char *const message, const char *const name)
-	#define PRINTERROREVENT() /*-------------------------*/ local void             printErrorEvent(const void *const event)
+	#define PRINTXERROREVENT() /*------------------------*/ local void             printXErrorEvent(const void *const event)
 	#define PRINTTITLEDVALUEDERROR() /*------------------*/ local void             printTitledValuedError(const char *const title, const char *const message, const uint value)
 	#define PRINTCONFIGERROR() /*------------------------*/ local void             printConfigError(const char *const type, const char *const message, const char finalStatementCharacter, const bool printLine, const bool printConfig, const bool printPointer, const bool printPattern, const char *const configPath, const uint statementLine, const char *const statementStart, const char *const statementWall, const Instruction *instructionStart, const Instruction *instructionCurrent, StringNodeRoot *const *const instructionDataStart, const char *const *currentScopeInstructionList, const StringNodeRoot *const currentScopeInstructionRoot)
 	#define OPENERRORSTREAM() /*-------------------------*/ local bool             openErrorStream(void)
@@ -366,13 +360,11 @@ SOFTWARE. */
 	#define findString(a, b) /*--------------------------*/ (!getStringNode(a, (const char **const)(b)))
 
 	#if DEBUG
-		#define printXEvent(void) /*-----------*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %sX event:%s %s\n", colorStart, programName, colorEvent, colorEnd, (*event).response_type == randrBaseEvent + XCB_RANDR_SCREEN_CHANGE_NOTIFY? "screen change" : *(eventName + (((*event).response_type &= ~b(10000000)) > 35? countof(eventName) - 1 : (*event).response_type))))
-		#define printUnexpectedXEvent(void) /*-*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %sunexpected X event:%s %s, ignored\n", colorStart, programName, colorEvent, colorEnd, (*event).response_type == randrBaseEvent + XCB_RANDR_SCREEN_CHANGE_NOTIFY? "screen change" : *(eventName + (((*event).response_type &= ~b(10000000)) > 35? countof(eventName) - 1 : (*event).response_type))))
-		#define printCommand(void) /*----------*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %scommand:%s %s\n", colorStart, programName, colorEvent, colorEnd, *(commandList + ((*eventModifierNode).command >= countof(commandList)? countof(commandList) - 1 : (*eventModifierNode).command))))
+		#define printXEvent(void) /*--*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %sX event:%s %s\n", colorStart, programName, colorEvent, colorEnd, (*event).response_type == randrBaseEvent + XCB_RANDR_SCREEN_CHANGE_NOTIFY? "screen change" : *(eventName + (((*event).response_type &= ~b(10000000)) > 35? countof(eventName) - 1 : (*event).response_type))))
+		#define printCommand(void) /*-*/ (fprintf(DEFAULT_OUTPUT_STREAM, "%s%s: %scommand:%s %s\n", colorStart, programName, colorEvent, colorEnd, *(commandList + ((*eventModifierNode).command >= countof(commandList)? countof(commandList) - 1 : (*eventModifierNode).command))))
 	#else
-		#define printXEvent(void) /*-----------*/ EMPTY_MACRO
-		#define printUnexpectedXEvent(void) /*-*/ EMPTY_MACRO
-		#define printCommand(void) /*----------*/ EMPTY_MACRO
+		#define printXEvent(void) /*--*/ EMPTY_MACRO
+		#define printCommand(void) /*-*/ EMPTY_MACRO
 	#endif
 /*!}*/
 
@@ -428,8 +420,10 @@ SOFTWARE. */
 		bool /*----------------*/ windowMapped;
 		int8 /*----------------*/ previousBrightness;
 		int8 /*----------------*/ brightness;
-		uint8 /*---------------*/ pad0[4];
+		uint8 /*---------------*/ pad0[1];
 		bool /*----------------*/ windowThreadCreated;
+		bool /*----------------*/ windowMutexCreated;
+		bool /*----------------*/ windowCondCreated;
 		pthread_t /*-----------*/ windowThread;
 		pthread_mutex_t /*-----*/ windowMutex;
 		pthread_cond_t /*------*/ windowCond;
@@ -603,6 +597,7 @@ SOFTWARE. */
 	local const char * /*-----------------*/ colorEnd;
 	local const char * /*-----------------*/ labelExamined;
 	local const ModifierNode * /*---------*/ eventModifierNode;
+	local bool /*-------------------------*/ memorySegmentMutexCreated;
 	local pthread_mutex_t /*--------------*/ memorySegmentMutex;
 	local bool /*-------------------------*/ mustOpenErrorStream;
 	local FILE * /*-----------------------*/ errorStream;
@@ -628,8 +623,6 @@ SOFTWARE. */
 	local uint /*-------------------------*/ monitorToken;
 	local xcb_colormap_t /*---------------*/ colormap;
 	local xcb_gcontext_t /*---------------*/ gc;
-	local bool /*-------------------------*/ readConfigHasLockedMutex;
-	local pthread_mutex_t /*--------------*/ readConfigMutex;
 	local bool /*-------------------------*/ displaySimpleConfigErrors;
 	local uint8 /*------------------------*/ lastGlobalCommand;
 	local StringNodeRoot /*---------------*/ globalScopesInstructionRoot;
@@ -691,7 +684,7 @@ SOFTWARE. */
 		, "read-config"
 		, "do"
 		, "set"
-		, "copy-image"
+		, "create-image-from"
 		, "composite-images"
 		, "grab-keycode"
 		, "grab-button"
@@ -808,7 +801,7 @@ SOFTWARE. */
 	local const Instruction /*------------*/ readConfigInstruction[] = {STRING_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ doInstruction[] = {NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ setInstruction[] = {NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
-	local const Instruction /*------------*/ copyImageInstruction[] = {NAME_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ createImageFromInstruction[] = {NAME_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ compositeImagesInstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ grabKeycodeInstruction[] = {NAME_LIST_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ grabButtonInstruction[] = {NAME_LIST_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
@@ -854,7 +847,7 @@ SOFTWARE. */
 	local StringNodeRoot *const *const /*-*/ readConfigInstructionData = NULL;
 	local StringNodeRoot *const /*--------*/ doInstructionData[] = {&commandRoot};
 	local StringNodeRoot *const /*--------*/ setInstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ copyImageInstructionData[] = {&imageVariableRoot, &imageVariableRoot};
+	local StringNodeRoot *const /*--------*/ createImageFromInstructionData[] = {&imageVariableRoot, &imageVariableRoot};
 	local StringNodeRoot *const /*--------*/ compositeImagesInstructionData[] = {&compositeImagesOperationRoot, &imageVariableRoot};
 	local StringNodeRoot *const /*--------*/ grabKeycodeInstructionData[] = {&modifierRoot, &commandRoot};
 	local StringNodeRoot *const /*--------*/ grabButtonInstructionData[] = {&modifierRoot, &commandRoot};
@@ -903,7 +896,7 @@ SOFTWARE. */
 		, get##i(readConfig) \
 		, get##i(do) \
 		, get##i(set) \
-		, get##i(copyImage) \
+		, get##i(createImageFrom) \
 		, get##i(compositeImages) \
 		, get##i(grabKeycode) \
 		, get##i(grabButton) \
@@ -970,12 +963,18 @@ SOFTWARE. */
 	COPYMEMORY();
 	GETTIMESTAMP();
 	GETPOINTERMONITOR();
-	COPYIMAGE();
+	CREATEIMAGEFROM();
 	COMPOSITEIMAGES();
 	COMPOSITEIMAGESOVER();
 	COMPOSITEIMAGESAND();
 	TWOPASSBOXBLUR();
+	GETMONITORGAMMA();
+	FINDLASTNONCLAMPED();
+	ROUNDDOUBLE();
+	SETMONITORGAMMA();
+	MIN();
 	CANCELTHREADS();
+	FREEMONITORS();
 	CLEANUP();
 	PRINTUNACCOUNTEDFORPOINTERS();
 	PRINTERROR();
@@ -983,7 +982,7 @@ SOFTWARE. */
 	PRINTTITLEDQUOTEDERROR();
 	PRINTCONNECTIONERROR();
 	PRINTTITLEDNAMEDERROR();
-	PRINTERROREVENT();
+	PRINTXERROREVENT();
 	PRINTTITLEDVALUEDERROR();
 	PRINTCONFIGERROR();
 	OPENERRORSTREAM();
@@ -999,379 +998,32 @@ SOFTWARE. */
 
 
 /*! program globals */
+	local bool /*-------------*/ sleepMutexCreated;
+	local bool /*-------------*/ sleepCondCreated;
+	local bool /*-------------*/ sleepThreadCreated;
+	local bool /*-------------*/ globalsLockCreated;
 	local pthread_mutex_t /*--*/ sleepMutex;
 	local pthread_cond_t /*---*/ sleepCond;
 	local pthread_t /*--------*/ sleepThread;
-	local bool /*-------------*/ sleepThreadCreated;
 	local pthread_rwlock_t /*-*/ globalsLock;
 
+	local uint8 /*------------*/ brightnessLock;
 
 
 
 
 
 
-
-#define NONE_BRIGHTNESS_OPERATION /*-----*/ (0)
-#define SET_BRIGHTNESS_OPERATION /*------*/ (1)
-#define INCREASE_BRIGHTNESS_OPERATION /*-*/ (2)
-#define DECREASE_BRIGHTNESS_OPERATION /*-*/ (3)
-
-#define GETMONITORGAMMA() /*-------------*/ local bool   getMonitorGamma(void)
-#define FINDLASTNONCLAMPED() /*----------*/ local uint   findLastNonClamped(const uint16 *current, const int size)
-#define ROUNDDOUBLE() /*-----------------*/ local double roundDouble(double number)
-#define SETMONITORGAMMA() /*-------------*/ local void   setMonitorGamma(const int newBrightness, const uint8 operation)
-#define MIN() /*-------------------------*/ local double min(const double x, const double y)
-
-GETMONITORGAMMA();
-FINDLASTNONCLAMPED();
-ROUNDDOUBLE();
-SETMONITORGAMMA();
-MIN();
-
-
-
-#define DRAWWINDOW() /*------------------*/ local void   drawWindow(Monitor *const monitor)
-#define FREEMONITORS() /*----------------*/ local void   freeMonitors(void)
-
-DRAWWINDOW();
-FREEMONITORS();
 
 
 
 #define SLEEPMAIN() /*-------------------*/ local void * sleepMain(void *arg)
 #define DRAWWINDOWMAIN() /*--------------*/ local void * drawWindowMain(void *arg)
+#define DRAWWINDOW() /*------------------*/ local void   drawWindow(Monitor *const monitor)
 
 SLEEPMAIN();
 DRAWWINDOWMAIN();
-
-
-
-
-
-
-
-
-
-GETMONITORGAMMA(){
-	#define GAMMA_COOKIE_DATA_SIZE /*-*/ (16)
-	Monitor *monitorCurrent = monitorStart;
-	Monitor *monitorWall = monitorCurrent + monitorAllocated;
-	uint gammaCookieSize = GAMMA_COOKIE_DATA_SIZE;
-	uint gammaCookieAllocated = 0;
-	xcb_randr_get_crtc_gamma_cookie_t *cookieStart = malloc(gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t));
-	xcb_randr_get_crtc_gamma_cookie_t *cookieCurrent;
-	uint cookieToken = pushPointer(cookieStart, "getMonitorGamma() gamma cookie start pointer", iFree);
-	if(!cookieStart){
-		jmp setMonitorGammaDefaultLoop;
-		setMonitorGammaDefaultLoop:{
-			if(monitorCurrent < monitorWall){
-				CRTC *crtcCurrent = (*monitorCurrent).crtcStart;
-				CRTC *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
-				jmp setCRTCGammaDefaultLoop;
-				setCRTCGammaDefaultLoop:{
-					if(crtcCurrent < crtcWall){
-						free((*crtcCurrent).dataStart);
-						popPointer((*crtcCurrent).dataToken);
-						(*crtcCurrent).dataStart = NULL;
-						(*crtcCurrent).dataToken = 0;
-						inc crtcCurrent;
-						jmp setCRTCGammaDefaultLoop;
-					}
-				}
-				inc monitorCurrent;
-				jmp setMonitorGammaDefaultLoop;
-			}
-			printTitledError("memory allocation error", "could not allocate memory for gamma cookies");
-			ret false;
-		}
-	}
-	jmp allocateCookiesLoop;
-	allocateCookiesLoop:{
-		if(monitorCurrent < monitorWall){
-			gammaCookieAllocated += (*monitorCurrent).crtcAllocated;
-			if(gammaCookieAllocated == gammaCookieSize){
-				void *temp;
-				gammaCookieSize += GAMMA_COOKIE_DATA_SIZE;
-				temp = realloc(cookieStart, gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t));
-				updatePointer(cookieToken, temp);
-				if(!temp){
-					printTitledError("memory allocation error", "could not reallocate memory for gamma cookies");
-					free(cookieStart);
-					popPointer(cookieToken);
-					ret false;
-				}
-				cookieStart = temp;
-			}
-			inc monitorCurrent;
-			jmp allocateCookiesLoop;
-		}
-		cookieCurrent = cookieStart;
-		monitorCurrent = monitorStart;
-		jmp getMonitorCRTCGammaRequestLoop;
-	}
-	getMonitorCRTCGammaRequestLoop:{
-		if(monitorCurrent < monitorWall){
-			CRTC *crtcCurrent = (*monitorCurrent).crtcStart;
-			CRTC *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
-			jmp getCRTCGammaRequestLoop;
-			getCRTCGammaRequestLoop:{
-				if(crtcCurrent < crtcWall){
-					*cookieCurrent = xcb_randr_get_crtc_gamma_unchecked(connection, (*crtcCurrent).crtc);
-					inc crtcCurrent;
-					inc cookieCurrent;
-					jmp getCRTCGammaRequestLoop;
-				}
-				inc monitorCurrent;
-				jmp getMonitorCRTCGammaRequestLoop;
-			}
-		}
-		cookieCurrent = cookieStart;
-		monitorCurrent = monitorStart;
-		jmp getMonitorCRTCGammaReplyLoop;
-	}
-	getMonitorCRTCGammaReplyLoop:{
-		if(monitorCurrent < monitorWall){
-			CRTC *crtcCurrent = (*monitorCurrent).crtcStart;
-			CRTC *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
-			jmp getCRTCGammaReplyLoop;
-			getCRTCGammaReplyLoop:{
-				if(crtcCurrent < crtcWall){
-					xcb_randr_get_crtc_gamma_reply_t *const gammaReply = xcb_wait_for_reply(connection, *cookieCurrent, NULL);
-					uint gammaToken = pushPointer(gammaReply, "getMonitorGamma() gamma reply", iFree);
-					free((*crtcCurrent).dataStart);
-					popPointer((*crtcCurrent).dataToken);
-					(*crtcCurrent).dataStart = gammaReply;
-					(*crtcCurrent).dataToken = gammaToken;
-					if(gammaReply){
-						double redGamma;
-						double greenGamma;
-						double blueGamma;
-						uint16 *red = xcb_randr_get_crtc_gamma_red(gammaReply);
-						uint16 *green = xcb_randr_get_crtc_gamma_green(gammaReply);
-						uint16 *blue = xcb_randr_get_crtc_gamma_blue(gammaReply);
-						(*crtcCurrent).red = red;
-						(*crtcCurrent).green = green;
-						(*crtcCurrent).blue = blue;
-						(*crtcCurrent).gammaSize = xcb_randr_get_crtc_gamma_red_length(gammaReply);
-						if((*crtcCurrent).gammaSize < 2 or (*crtcCurrent).gammaSize > 65536){
-							printTitledError("gamma size error", "gamma size not in [2, 65536]");
-						}else{
-							uint gammaSize = (*crtcCurrent).gammaSize;
-							double brightness;
-							double input0;
-							double value0;
-							double input1;
-							double value1;
-							uint middleObservation;
-							uint lastRedObservation = findLastNonClamped(red, gammaSize);
-							uint lastGreenObservation = findLastNonClamped(green, gammaSize);
-							uint lastBlueObservation = findLastNonClamped(blue, gammaSize);
-							uint16 *bestColorArray = red;
-							uint bestLastObservation = lastRedObservation;
-							if(lastGreenObservation > bestLastObservation){
-								bestColorArray = green;
-								bestLastObservation = lastGreenObservation;
-							}
-							if(lastBlueObservation > bestLastObservation){
-								bestColorArray = blue;
-								bestLastObservation = lastBlueObservation;
-							}
-							middleObservation = bestLastObservation / 2;
-							input0 = (double)(middleObservation + 1) / gammaSize;
-							value0 = (double)(*(bestColorArray + middleObservation)) / 65535;
-							input1 = (double)(bestLastObservation + 1) / gammaSize;
-							value1 = (double)(*(bestColorArray + bestLastObservation)) / 65535;
-							if(roundDouble(value1) < 0.01){
-								brightness = 0.0;
-								redGamma = 1.0;
-								greenGamma = 1.0;
-								blueGamma = 1.0;
-							}else{
-								if(bestLastObservation + 1 == gammaSize){
-									brightness = value1;
-								}else{
-									brightness = exp((ln(input1) * ln(value0) - ln(input0) * ln(value1)) / (ln(input1) - ln(input0)));
-								}
-								brightness = roundDouble(brightness);
-								redGamma = ln((double)*(red + lastRedObservation / 2) / brightness / 65535) / ln(((double)lastRedObservation / 2 + 1) / gammaSize);
-								greenGamma = ln((double)*(green + lastGreenObservation / 2) / brightness / 65535) / ln(((double)lastGreenObservation / 2 + 1) / gammaSize);
-								blueGamma = ln((double)*(blue + lastBlueObservation / 2) / brightness / 65535) / ln(((double)lastBlueObservation / 2 + 1) / gammaSize);
-								redGamma = roundDouble(redGamma);
-								greenGamma = roundDouble(greenGamma);
-								blueGamma = roundDouble(blueGamma);
-								if(!redGamma){
-									redGamma = 1.0;
-								}
-								if(!greenGamma){
-									greenGamma = 1.0;
-								}
-								if(!blueGamma){
-									blueGamma = 1.0;
-								}
-							}
-							(*crtcCurrent).brightness = brightness;
-							(*crtcCurrent).redGamma = redGamma;
-							(*crtcCurrent).greenGamma = greenGamma;
-							(*crtcCurrent).blueGamma = blueGamma;
-						}
-					}
-					inc crtcCurrent;
-					inc cookieCurrent;
-					jmp getCRTCGammaReplyLoop;
-				}
-			}
-			inc monitorCurrent;
-			jmp getMonitorCRTCGammaReplyLoop;
-		}
-		free(cookieStart);
-		popPointer(cookieToken);
-		ret true;
-	}
-	#undef  GAMMA_COOKIE_DATA_SIZE
-}
-FINDLASTNONCLAMPED(){
-	const uint16 *const start = current - size;
-	jmp loop;
-	loop:{
-		if(dec current >= start){
-			if(*current < 65535){
-				ret current - start;
-			}
-			jmp loop;
-		}
-		ret 1;
-	}
-}
-ROUNDDOUBLE(){
-	double doubleNumber;
-	number *= 100;
-	doubleNumber = (int)number;
-	ret doubleNumber / 100 + (number - doubleNumber >= 0.5) * 0.01;
-}
-SETMONITORGAMMA(){
-	Monitor *monitorCurrent;
-	Monitor *monitorWall;
-	double newDoubleBrightness = (double)newBrightness / 100;
-	switch operation over
-		to SET_BRIGHTNESS_OPERATION: /*------*/ brk;
-		to INCREASE_BRIGHTNESS_OPERATION: /*-*/ brk;
-		to DECREASE_BRIGHTNESS_OPERATION: /*-*/ brk;
-		off: /*------------------------------*/ ret;
-	end
-	switch whichMonitorUpdates over
-		to POINTER_WHICH_MONITOR:{
-			monitorCurrent = getPointerMonitor();
-			monitorWall = monitorCurrent + 1;
-			jmp setMonitorGammaLoop;
-		}
-		to ALL_WHICH_MONITOR:{
-			monitorCurrent = monitorStart;
-			monitorWall = monitorCurrent + monitorAllocated;
-			jmp setMonitorGammaLoop;
-		}
-		off:{
-			ret;
-		}
-	end
-	setMonitorGammaLoop:{
-		if(monitorCurrent < monitorWall){
-			CRTC *crtcCurrent = (*monitorCurrent).crtcStart;
-			CRTC *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
-			double averageBrightness = 0.0;
-			uint brightnessCounter = 0;
-			jmp setCRTCGammaLoop;
-			setCRTCGammaLoop:{
-				if(crtcCurrent < crtcWall){
-					const double gammaSize = (*crtcCurrent).gammaSize;
-					const double gammaMinusOne = gammaSize - 1;
-					const double redGamma = (*crtcCurrent).redGamma;
-					const double greenGamma = (*crtcCurrent).greenGamma;
-					const double blueGamma = (*crtcCurrent).blueGamma;
-					uint16 *red = (*crtcCurrent).red;
-					uint16 *green = (*crtcCurrent).green;
-					uint16 *blue = (*crtcCurrent).blue;
-					double brightness = (*crtcCurrent).brightness;
-					double currentGamma = 0.0;
-					if(!(*crtcCurrent).dataStart){
-						inc crtcCurrent;
-						jmp setCRTCGammaLoop;
-					}
-					switch operation over
-						to SET_BRIGHTNESS_OPERATION: /*------*/ brightness = newDoubleBrightness; /*--*/ brk;
-						to INCREASE_BRIGHTNESS_OPERATION: /*-*/ brightness += newDoubleBrightness; /*-*/ brk;
-						to DECREASE_BRIGHTNESS_OPERATION: /*-*/ brightness -= newDoubleBrightness; /*-*/ brk;
-						off: /*------------------------------*/ /*------------------------------------*/ ret;
-					end
-					if(brightness > 1.0){
-						brightness = 1.0;
-					}elif(brightness < 0.0){
-						brightness = 0.0;
-					}
-					(*crtcCurrent).brightness = brightness;
-					averageBrightness += brightness;
-					inc brightnessCounter;
-					jmp setCRTCGammaInputsLoop;
-					setCRTCGammaInputsLoop:{
-						const double input = currentGamma / gammaMinusOne;
-						double redExponential;
-						double greenExponential;
-						double blueExponential;
-						if(redGamma == 1.0){
-							redExponential = input;
-						}else{
-							redExponential = pow(input, redGamma);
-						}
-						if(greenGamma == 1.0){
-							greenExponential = input;
-						}else{
-							greenExponential = pow(input, redGamma);
-						}
-						if(blueGamma == 1.0){
-							blueExponential = input;
-						}else{
-							blueExponential = pow(input, redGamma);
-						}
-						*red = min(redExponential * brightness, 1.0) * 65535.0;
-						*green = min(greenExponential * brightness, 1.0) * 65535.0;
-						*blue = min(blueExponential * brightness, 1.0) * 65535.0;
-						if(inc currentGamma < gammaSize){
-							inc red;
-							inc green;
-							inc blue;
-							jmp setCRTCGammaInputsLoop;
-						}
-						xcb_randr_set_crtc_gamma(connection, (*crtcCurrent).crtc, (*crtcCurrent).gammaSize, (*crtcCurrent).red, (*crtcCurrent).green, (*crtcCurrent).blue);
-						inc crtcCurrent;
-						jmp setCRTCGammaLoop;
-					}
-				}
-			}
-			{
-				const double monitorBrightness = averageBrightness * 100 / brightnessCounter;
-				(*monitorCurrent).previousBrightness = (*monitorCurrent).brightness;
-				if((*monitorCurrent).previousBrightness == -1){
-					(*monitorCurrent).previousBrightness = monitorBrightness;
-				}
-				(*monitorCurrent).brightness = monitorBrightness;
-			}
-			inc monitorCurrent;
-			jmp setMonitorGammaLoop;
-		}
-		xcb_flush(connection);
-		ret;
-	}
-}
-MIN(){
-	if(x < y){
-		ret x;
-	}
-	ret y;
-}
-
-
-
-uint8 brightnessLock;
+DRAWWINDOW();
 
 
 
@@ -1404,55 +1056,42 @@ int main(int argumentAmount, const char *const *argument){
 		jmp setGlobals;
 	}
 	setGlobals:{
-		programName /*--------------*/ = *argument;
-		configPath /*---------------*/ = NULL;
-		errorPath /*----------------*/ = NULL;
-		connectionName /*-----------*/ = NULL;
-		colorStart /*---------------*/ = MESSAGE_START;
-		colorFatal /*---------------*/ = MESSAGE_FATAL;
-		colorError /*---------------*/ = MESSAGE_ERROR;
-		colorEvent /*---------------*/ = MESSAGE_EVENT;
-		colorEnd /*-----------------*/ = MESSAGE_END;
-		mustOpenErrorStream /*------*/ = false;
-		errorStream /*--------------*/ = DEFAULT_ERROR_STREAM;
-		errorStreamToken /*---------*/ = 0;
-		quitting /*-----------------*/ = false;
-		connection /*---------------*/ = NULL;
-		connectionToken /*----------*/ = 0;
-		monitorStart /*-------------*/ = NULL;
-		monitorToken /*-------------*/ = 0;
-		readConfigHasLockedMutex /*-*/ = false;
-		lastGlobalCommand /*--------*/ = 0;
-		acceptingShared /*----------*/ = false;
-		sharedHasArrived /*---------*/ = false;
-		event /*--------------------*/ = NULL;
-		eventToken /*---------------*/ = 0;
-
-
-
-		if(pthread_mutex_init(&sleepMutex, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
-			printTitledError("pthread error", "could not init sleep mutex");
-		}
-		if(pthread_cond_init(&sleepCond, NULL) != PTHREAD_COND_INIT_SUCCESS){
-			printTitledError("pthread error", "could not init sleep cond");
-		}
-
-
-
-		/*! destroy this later */
-
-		if(pthread_rwlock_init(&globalsLock, NULL) != PTHREAD_RWLOCK_INIT_SUCCESS){
-			printTitledError("pthread error", "could not init globals lock");
-		}
-
-
-
-		if(pthread_mutex_init(&memorySegmentMutex, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
-			printTitledError("pthread error", "could not init memory segment mutex");
-			ret 0;
-		}
+		programName /*---------*/ = *argument;
+		configPath /*----------*/ = NULL;
+		errorPath /*-----------*/ = NULL;
+		connectionName /*------*/ = NULL;
+		colorStart /*----------*/ = MESSAGE_START;
+		colorFatal /*----------*/ = MESSAGE_FATAL;
+		colorError /*----------*/ = MESSAGE_ERROR;
+		colorEvent /*----------*/ = MESSAGE_EVENT;
+		colorEnd /*------------*/ = MESSAGE_END;
+		mustOpenErrorStream /*-*/ = false;
+		errorStream /*---------*/ = DEFAULT_ERROR_STREAM;
+		errorStreamToken /*----*/ = 0;
+		quitting /*------------*/ = false;
+		connection /*----------*/ = NULL;
+		connectionToken /*-----*/ = 0;
+		monitorStart /*--------*/ = NULL;
+		monitorToken /*--------*/ = 0;
+		lastGlobalCommand /*---*/ = 0;
+		acceptingShared /*-----*/ = false;
+		sharedHasArrived /*----*/ = false;
+		event /*---------------*/ = NULL;
+		eventToken /*----------*/ = 0;
 		initMemoryManager();
 		shmConnect();
+		globalsLockCreated = pthread_rwlock_init(&globalsLock, NULL) == PTHREAD_RWLOCK_INIT_SUCCESS;
+		sleepMutexCreated = pthread_mutex_init(&sleepMutex, NULL) == PTHREAD_MUTEX_INIT_SUCCESS;
+		sleepCondCreated = pthread_cond_init(&sleepCond, NULL) == PTHREAD_COND_INIT_SUCCESS;
+		if(!globalsLockCreated){
+			printTitledError("pthread error", "could not init globals lock");
+		}
+		if(!sleepMutexCreated){
+			printTitledError("pthread error", "could not init sleep mutex");
+		}
+		if(!sleepCondCreated){
+			printTitledError("pthread error", "could not init sleep cond");
+		}
 		setStringRoot(&globalScopesInstructionRoot);
 		setStringRoot(&globalInstructionRoot);
 		setStringRoot(&scope1ScopeInstructionRoot);
@@ -1467,7 +1106,7 @@ int main(int argumentAmount, const char *const *argument){
 		setStringRoot(&commandRoot);
 		setShortcutRoot(&keycodeShortcut);
 		setShortcutRoot(&buttonShortcut);
-		processingSignal /*---------*/ = false;
+		processingSignal /*----*/ = false;
 		jmp getProgramArguments;
 	}
 	getProgramArguments:{
@@ -1969,7 +1608,7 @@ int main(int argumentAmount, const char *const *argument){
 		valueList.backgroundColor = 0xFF000000;
 		valueList.borderColor = 0x00000000;
 		valueList.overrideRedirect = true;
-		valueList.eventMask = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY; /*! keep structure notify? */
+		valueList.eventMask = XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 		valueList.colormap = colormap;
 		jmp storeMonitorLoop;
 		storeMonitorLoop:{
@@ -2064,6 +1703,7 @@ int main(int argumentAmount, const char *const *argument){
 				hints.flags = INPUT_HINT | STATE_HINT;
 				hints.input = false;
 				hints.initialState = NORMAL_STATE;
+				*hostname = '\0';
 				if(gethostname(hostname, countof(hostname)) != GETHOSTNAME_SUCCESS){
 					printTitledError("get hostname error", "could not get hostname");
 				}
@@ -2138,20 +1778,25 @@ int main(int argumentAmount, const char *const *argument){
 				xcb_create_window(connection, depth, window, (*screen).root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP, &valueList);
 				xcb_create_pixmap(connection, depth, (*monitorCurrent).pixmap, window, 1, 1);
 				xcb_create_gc(connection, (*monitorCurrent).gc, (*monitorCurrent).pixmap, XCB_NONE, NULL);
-
-
-
 				xcb_change_window_attributes(connection, window, XCB_CW_BACK_PIXMAP, &(*monitorCurrent).pixmap);
 
 
 
-				if(pthread_mutex_init(&(*monitorCurrent).windowMutex, NULL) != PTHREAD_MUTEX_INIT_SUCCESS){
+
+
+
+
+
+
+				(*monitorCurrent).windowMutexCreated = pthread_mutex_init(&(*monitorCurrent).windowMutex, NULL) == PTHREAD_MUTEX_INIT_SUCCESS;
+				(*monitorCurrent).windowCondCreated = pthread_cond_init(&(*monitorCurrent).windowCond, NULL) == PTHREAD_COND_INIT_SUCCESS;
+				(*monitorCurrent).windowThreadCreated = pthread_create(&(*monitorCurrent).windowThread, NULL, drawWindowMain, monitorCurrent) == PTHREAD_CREATE_SUCCESS;
+				if(!(*monitorCurrent).windowMutexCreated){
 					printTitledError("pthread error", "could not init window mutex");
 				}
-				if(pthread_cond_init(&(*monitorCurrent).windowCond, NULL) != PTHREAD_COND_INIT_SUCCESS){
+				if(!(*monitorCurrent).windowCondCreated){
 					printTitledError("pthread error", "could not init window cond");
 				}
-				(*monitorCurrent).windowThreadCreated = pthread_create(&(*monitorCurrent).windowThread, NULL, drawWindowMain, monitorCurrent) == PTHREAD_CREATE_SUCCESS;
 				if(!(*monitorCurrent).windowThreadCreated){
 					printTitledError("pthread error", "could not create window thread");
 				}
@@ -2208,15 +1853,6 @@ int main(int argumentAmount, const char *const *argument){
 			}
 			free(reply);
 			popPointer(replyToken);
-
-
-
-			/*! this is included in a globals mutex critical section but only here */
-
-			getMonitorGamma();
-
-
-
 			jmp trimMonitorMemory;
 		}
 		trimMonitorMemory:{
@@ -2231,7 +1867,7 @@ int main(int argumentAmount, const char *const *argument){
 	}
 	storeMonitorsExit:{
 		if(event){
-			if(pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+			if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) == PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 				printTitledError("pthread error", "could not unlock globals write lock");
 			}
 			jmp eventLoop;
@@ -2342,7 +1978,7 @@ int main(int argumentAmount, const char *const *argument){
 			to XCB_FOCUS_IN: /*----------*/ jmp unexpectedEvent;
 			to XCB_FOCUS_OUT: /*---------*/ jmp unexpectedEvent;
 			to XCB_KEYMAP_NOTIFY: /*-----*/ jmp eventLoop;
-			to XCB_EXPOSE: /*------------*/ jmp exposeEvent;
+			to XCB_EXPOSE: /*------------*/ jmp unexpectedEvent;
 			to XCB_GRAPHICS_EXPOSURE: /*-*/ /*----------------*/ jmp unexpectedEvent;
 			to XCB_NO_EXPOSURE: /*-------*/ /*----------------*/ jmp unexpectedEvent;
 			to XCB_VISIBILITY_NOTIFY: /*-*/ /*----------------*/ jmp unexpectedEvent;
@@ -2352,7 +1988,7 @@ int main(int argumentAmount, const char *const *argument){
 			to XCB_MAP_NOTIFY: /*--------*/ jmp mapNotifyEvent;
 			to XCB_MAP_REQUEST: /*-------*/ jmp unexpectedEvent;
 			to XCB_REPARENT_NOTIFY: /*---*/ /*----------------*/ jmp unexpectedEvent;
-			to XCB_CONFIGURE_NOTIFY: /*--*/ /*----------------*/ jmp unexpectedEvent; /*! what happens then? */
+			to XCB_CONFIGURE_NOTIFY: /*--*/ jmp configureNotifyEvent;
 			to XCB_CONFIGURE_REQUEST: /*-*/ jmp unexpectedEvent;
 			to XCB_GRAVITY_NOTIFY: /*----*/ jmp unexpectedEvent;
 			to XCB_RESIZE_REQUEST: /*----*/ jmp unexpectedEvent;
@@ -2371,7 +2007,7 @@ int main(int argumentAmount, const char *const *argument){
 		#undef  XCB_ONE
 	}
 	errorEvent:{
-		printErrorEvent(event);
+		printXErrorEvent(event);
 		jmp eventLoop;
 	}
 	impossibleEvent:{
@@ -2460,13 +2096,8 @@ int main(int argumentAmount, const char *const *argument){
 		jmp eventLoop;
 		#undef  e
 	}
-	exposeEvent:{
-		#define e /*-*/ ((xcb_expose_event_t *)event)
-
-
-
-		/*! mapNotify or expose? */
-
+	mapNotifyEvent:{
+		#define e /*-*/ ((xcb_map_notify_event_t *)event)
 		const xcb_window_t eventWindow = (*e).window;
 		Monitor *current = monitorStart;
 		Monitor *const wall = current + monitorAllocated;
@@ -2482,24 +2113,26 @@ int main(int argumentAmount, const char *const *argument){
 			jmp eventLoop;
 		}
 		signalWindowThread:{
-			if(pthread_mutex_lock(&(*current).windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
-				printTitledError("pthread error", "could not lock window mutex");
-			}
-			if(pthread_cond_signal(&(*current).windowCond) != PTHREAD_COND_SIGNAL_SUCCESS){
-				printTitledError("pthread error", "could not signal window thread");
-			}
-			if(pthread_mutex_unlock(&(*current).windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-				printTitledError("pthread error", "could not unlock window mutex");
+			if((*current).windowMutexCreated and (*current).windowCondCreated){
+				if(pthread_mutex_lock(&(*current).windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+					printTitledError("pthread error", "could not lock window mutex");
+				}
+				if(pthread_cond_signal(&(*current).windowCond) != PTHREAD_COND_SIGNAL_SUCCESS){
+					printTitledError("pthread error", "could not signal window thread");
+				}
+				if(pthread_mutex_unlock(&(*current).windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+					printTitledError("pthread error", "could not unlock window mutex");
+				}
 			}
 			jmp eventLoop;
 		}
 		#undef  e
 	}
-	mapNotifyEvent:{
+	configureNotifyEvent:{
 
 
 
-		/*! what goes on here? */
+		/*! keep track of the windows' size and position. for safety :) */
 
 
 
@@ -2516,14 +2149,14 @@ int main(int argumentAmount, const char *const *argument){
 		jmp unhandledEvent;
 	}
 	randrEvent:{
-		if(pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
+		if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
 		}
 		freeMonitors();
 		jmp storeMonitors;
 	}
 	randrError:{
-		printErrorEvent(event);
+		printXErrorEvent(event);
 		jmp eventLoop;
 	}
 	unhandledEvent:{
@@ -2531,7 +2164,8 @@ int main(int argumentAmount, const char *const *argument){
 		jmp eventLoop;
 	}
 	unexpectedEvent:{
-		printUnexpectedXEvent();
+		uint8 type = (*event).response_type;
+		printError("%s%s: %s%s:%s %s %s %s\n", colorStart, programName, colorError, "unexpected X event", colorEnd, "received unexpected", type == randrBaseEvent + XCB_RANDR_SCREEN_CHANGE_NOTIFY? "screen change": *(eventName + ((type &= ~b(10000000)) > 35? countof(eventName) - 1 : type)), "event, ignored");
 		jmp eventLoop;
 	}
 	switchCommand:{
@@ -2557,21 +2191,21 @@ int main(int argumentAmount, const char *const *argument){
 	}
 	setBrightnessCommand:{
 		if(getMonitorGamma()){
-			setMonitorGamma((*eventModifierNode).field0, SET_BRIGHTNESS_OPERATION);
+			setMonitorGamma((*eventModifierNode).field0, SET_BRIGHTNESS_OPERATION, true);
 			brightnessLock = 1;
 		}
 		jmp eventLoopCheckShortcuts;
 	}
 	increaseBrightnessCommand:{
 		if(getMonitorGamma()){
-			setMonitorGamma((*eventModifierNode).field0, INCREASE_BRIGHTNESS_OPERATION);
+			setMonitorGamma((*eventModifierNode).field0, INCREASE_BRIGHTNESS_OPERATION, true);
 			brightnessLock = 1;
 		}
 		jmp eventLoopCheckShortcuts;
 	}
 	decreaseBrightnessCommand:{
 		if(getMonitorGamma()){
-			setMonitorGamma((*eventModifierNode).field0, DECREASE_BRIGHTNESS_OPERATION);
+			setMonitorGamma((*eventModifierNode).field0, DECREASE_BRIGHTNESS_OPERATION, true);
 			brightnessLock = 1;
 		}
 		jmp eventLoopCheckShortcuts;
@@ -2595,6 +2229,9 @@ int main(int argumentAmount, const char *const *argument){
 				if(!getMonitorGamma()){
 					jmp eventLoop;
 				}
+				if(!brightnessLock){
+					setMonitorGamma(0, INCREASE_BRIGHTNESS_OPERATION, false);
+				}
 				jmp mapWindowLoop;
 			}
 			to ALL_WHICH_MONITOR:{
@@ -2602,6 +2239,9 @@ int main(int argumentAmount, const char *const *argument){
 				wall = current + monitorAllocated;
 				if(!getMonitorGamma()){
 					jmp eventLoop;
+				}
+				if(!brightnessLock){
+					setMonitorGamma(0, INCREASE_BRIGHTNESS_OPERATION, false);
 				}
 				jmp mapWindowLoop;
 			}
@@ -2651,14 +2291,16 @@ int main(int argumentAmount, const char *const *argument){
 			jmp signalSleepThread;
 		}
 		signalSleepThread:{
-			if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
-				printTitledError("pthread error", "could not lock sleep mutex");
-			}
-			if(pthread_cond_signal(&sleepCond) != PTHREAD_COND_SIGNAL_SUCCESS){
-				printTitledError("pthread error", "could not signal sleep thread");
-			}
-			if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-				printTitledError("pthread error", "could not unlock sleep mutex");
+			if(sleepMutexCreated and sleepCondCreated){
+				if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+					printTitledError("pthread error", "could not lock sleep mutex");
+				}
+				if(pthread_cond_signal(&sleepCond) != PTHREAD_COND_SIGNAL_SUCCESS){
+					printTitledError("pthread error", "could not signal sleep thread");
+				}
+				if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+					printTitledError("pthread error", "could not unlock sleep mutex");
+				}
 			}
 			jmp eventLoopCheckShortcuts;
 		}
@@ -2822,9 +2464,12 @@ INITMEMORYMANAGER(){
 	s.data = malloc(DYNAMIC_DATA_SEGMENT_BLOCK_SIZE * sizeof(Pointer));
 	s.size = DYNAMIC_DATA_SEGMENT_BLOCK_SIZE;
 	s.allocated = 0;
+	memorySegmentMutexCreated = pthread_mutex_init(&memorySegmentMutex, NULL) == PTHREAD_MUTEX_INIT_SUCCESS;
+	if(!memorySegmentMutexCreated){
+		printTitledError("pthread error", "could not init memory segment mutex");
+	}
 	if(!s.data){
 		printTitledError("memory allocation error", "could not allocate memory for dynamic memory segment");
-		s.size = 0;
 		ret false;
 	}
 	(*s.data).data = (void *)1;
@@ -2832,15 +2477,15 @@ INITMEMORYMANAGER(){
 	ret true;
 }
 PUSHPOINTER(){
-	uint32 token;
+	uint32 token = 0;
 	jmp checkPointerValidity;
 	checkPointerValidity:{
-		if(!pointer){
+		if(!s.data or !pointer or !memorySegmentMutexCreated){
 			ret 0;
 		}
 		if(pthread_mutex_lock(&memorySegmentMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock pushPointer() mutex");
-			ret 0;
+			jmp emergencyExit;
 		}
 		jmp appendPointer;
 	}
@@ -2863,7 +2508,7 @@ PUSHPOINTER(){
 		jmp emergencyExit;
 	}
 	emergencyExit:{
-		if(pthread_mutex_unlock(&memorySegmentMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+		if(memorySegmentMutexCreated and pthread_mutex_unlock(&memorySegmentMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock pushPointer() mutex");
 		}
 		ret token;
@@ -2872,40 +2517,52 @@ PUSHPOINTER(){
 POPPOINTER(){
 	jmp checkTokenValidity;
 	checkTokenValidity:{
-		if(!token){
+		if(!s.data or !token or !memorySegmentMutexCreated){
 			ret;
 		}
 		if(pthread_mutex_lock(&memorySegmentMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock popPointer() mutex");
-			ret;
+			jmp emergencyExit;
 		}
 		(*(s.data + token)).data = NULL;
-		jmp trimSegment;
+		jmp trimSegmentLoop;
 	}
-	trimSegment:{
-		if(!(*(s.data + s.allocated - 1)).data){
-			dec s.allocated;
-			jmp trimSegment;
+	trimSegmentLoop:{
+		if(!(*(s.data + dec s.allocated)).data){
+			jmp trimSegmentLoop;
 		}
-		if(pthread_mutex_unlock(&memorySegmentMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+		inc s.allocated;
+		jmp emergencyExit;
+	}
+	emergencyExit:{
+		if(memorySegmentMutexCreated and pthread_mutex_unlock(&memorySegmentMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock popPointer() mutex");
 		}
 		ret;
 	}
 }
 UPDATEPOINTER(){
-	if(!token or !pointer){
+	jmp checkTokenValidity;
+	checkTokenValidity:{
+		if(!s.data or !token or !pointer or !memorySegmentMutexCreated){
+			ret;
+		}
+		if(pthread_mutex_lock(&memorySegmentMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+			printTitledError("pthread error", "could not lock updatePointer() mutex");
+			jmp emergencyExit;
+		}
+		jmp updatePointer;
+	}
+	updatePointer:{
+		(*(s.data + token)).data = pointer;
+		jmp emergencyExit;
+	}
+	emergencyExit:{
+		if(memorySegmentMutexCreated and pthread_mutex_unlock(&memorySegmentMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+			printTitledError("pthread error", "could not unlock updatePointer() mutex");
+		}
 		ret;
 	}
-	if(pthread_mutex_lock(&memorySegmentMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-		printTitledError("pthread error", "could not lock updatePointer() mutex");
-		ret;
-	}
-	(*(s.data + token)).data = pointer;
-	if(pthread_mutex_unlock(&memorySegmentMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-		printTitledError("pthread error", "could not unlock updatePointer() mutex");
-	}
-	ret;
 }
 DELETEMEMORYMANAGER(){
 	free(s.data);
@@ -3093,9 +2750,6 @@ SLEEPMAIN(){
 		struct timespec ts;
 		int waitReturn;
 		clock_gettime(CLOCK_REALTIME, &ts);
-		if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
-			printTitledError("pthread error", "could not lock sleep mutex");
-		}
 		if(pthread_rwlock_rdlock(&globalsLock) != PTHREAD_RWLOCK_RDLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals read lock");
 		}
@@ -3103,6 +2757,9 @@ SLEEPMAIN(){
 		ts.tv_nsec += nanoseconds;
 		if(pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals read lock");
+		}
+		if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+			printTitledError("pthread error", "could not lock sleep mutex");
 		}
 		waitReturn = pthread_cond_timedwait(&sleepCond, &sleepMutex, &ts);
 		if(waitReturn != ETIMEDOUT and waitReturn != PTHREAD_COND_TIMEDWAIT_SUCCESS){
@@ -3115,6 +2772,9 @@ SLEEPMAIN(){
 		}
 		if(waitReturn != ETIMEDOUT){
 			jmp waitUntilTimedOut;
+		}
+		if(!globalsLockCreated){
+			jmp waitIndefinitely;
 		}
 		if(pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
@@ -3133,7 +2793,7 @@ SLEEPMAIN(){
 			jmp unmapWindowLoop;
 		}
 		xcb_flush(connection);
-		if(pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals write lock");
 		}
 		jmp waitIndefinitely;
@@ -3165,11 +2825,21 @@ DRAWWINDOWMAIN(){
 		jmp waitIndefinitely;
 	}
 	waitIndefinitely:{
+
+
+
+		/*! can't use these due to deadlock but also can't copy the window mutex either */
+
 /*!
 		if(pthread_rwlock_rdlock(&globalsLock) != PTHREAD_RWLOCK_RDLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals read lock");
 		}
 */
+
+
+
+		/*!*/
+
 		if(pthread_mutex_lock(&(*monitor).windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock window mutex");
 		}
@@ -3179,6 +2849,9 @@ DRAWWINDOWMAIN(){
 		if(pthread_mutex_unlock(&(*monitor).windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock window mutex");
 		}
+
+
+
 /*!
 		if(pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals read lock");
@@ -3196,6 +2869,11 @@ DRAWWINDOWMAIN(){
 		jmp waitUntilTimedOut;
 	}
 	waitUntilTimedOut:{
+
+
+
+		/*!*/
+
 		if(pthread_rwlock_rdlock(&globalsLock) != PTHREAD_RWLOCK_RDLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals read lock");
 		}
@@ -3209,6 +2887,9 @@ DRAWWINDOWMAIN(){
 		if(pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock globals read lock");
 		}
+
+
+
 		jmp waitIndefinitely;
 	}
 	ret NULL;
@@ -3792,7 +3473,6 @@ READCONFIG(){
 	StringNodeRoot *const *instructionDataStartCopy;
 	StringNodeRoot *const *instructionDataCurrent;
 	StringNodeRoot *currentScopeInstructionRoot = &globalInstructionRoot;
-	bool lockUnlockMutex = true;
 	image0Return.data = NULL;
 	image0Return.dataToken = 0;
 	image1Return.data = NULL;
@@ -3803,15 +3483,6 @@ READCONFIG(){
 	image3Return.dataToken = 0;
 	image4Return.data = NULL;
 	image4Return.dataToken = 0;
-	if(readConfigHasLockedMutex){
-		lockUnlockMutex = false;
-	}
-	if(lockUnlockMutex){
-		if(pthread_mutex_lock(&readConfigMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
-			printTitledError("pthread error", "could not lock readConfig() mutex");
-		}
-		readConfigHasLockedMutex = true;
-	}
 	jmp setupPointers;
 	setupPointers:{
 		if(getConfigChar == fgetc){
@@ -4449,8 +4120,8 @@ READCONFIG(){
 			integer4Instruction = instructionCurrent;
 		}
 		switch matchInteger(&statementCurrent, statementWall, integerPointer) over
-			to NON_NUMBER: /*-------------*/ jmp printNonNumberError;
-			to OVERFLOWN_NUMBER: /*-------*/ jmp printOverflownNumberError;
+			to NON_NUMBER_NUMBER: /*-------------*/ jmp printNonNumberError;
+			to OVERFLOWN_NUMBER_NUMBER: /*-------*/ jmp printOverflownNumberError;
 			to DIVIDED_BY_ZERO_NUMBER: /*-*/ jmp printDividedByZeroNumberError;
 			off: /*-----------------------*/ jmp advanceInstruction;
 		end
@@ -4732,8 +4403,12 @@ READCONFIG(){
 			}
 		}
 		if(instructionStartCopy == setInstruction){
+			if(!globalsLockCreated){
+				jmp getStatementStart;
+			}
 			if(pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 				printTitledError("pthread error", "could not lock globals write lock");
+				jmp setInstructionExit;
 			}
 			switch name0Return over
 				to X_VARIABLE:{
@@ -4923,13 +4598,13 @@ READCONFIG(){
 				}
 			}
 			setInstructionExit:{
-				if(pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+				if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 					printTitledError("pthread error", "could not unlock globals write lock");
 				}
 				jmp getStatementStart;
 			}
 		}
-		if(instructionStartCopy == copyImageInstruction){
+		if(instructionStartCopy == createImageFromInstruction){
 			Image *source;
 			Image *destination;
 			switch name0Return over
@@ -4950,7 +4625,7 @@ READCONFIG(){
 			end
 			free((*destination).data);
 			popPointer((*destination).dataToken);
-			copyImage(source, destination);
+			createImageFrom(source, destination);
 			jmp getStatementStart;
 		}
 		if(instructionStartCopy == compositeImagesInstruction){
@@ -5338,12 +5013,6 @@ READCONFIG(){
 		if(configFile){
 			fclose(configFile);
 			popPointer(configFileToken);
-		}
-		if(lockUnlockMutex){
-			if(pthread_mutex_unlock(&readConfigMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-				printTitledError("pthread error", "could not unlock readConfig() mutex");
-			}
-			readConfigHasLockedMutex = false;
 		}
 		ret;
 	}
@@ -5755,15 +5424,15 @@ MATCHINTEGER(){
 	validNumber:{
 		*statementCurrent = current + 1;
 		*returnValue = i0;
-		ret VALID_NUMBER;
+		ret VALID_NUMBER_NUMBER;
 	}
 	nonNumber:{
 		*statementCurrent = current + 1;
-		ret NON_NUMBER;
+		ret NON_NUMBER_NUMBER;
 	}
 	overflownNumber:{
 		*statementCurrent = current + 1;
-		ret OVERFLOWN_NUMBER;
+		ret OVERFLOWN_NUMBER_NUMBER;
 	}
 	dividedByZeroNumber:{
 		*statementCurrent = current + 1;
@@ -6296,9 +5965,9 @@ GETPOINTERMONITOR(){
 	}
 	ret monitorStart;
 }
-COPYIMAGE(){
+CREATEIMAGEFROM(){
 	void *dataStart = malloc((*source).size * sizeof(uint8));
-	uint dataToken = pushPointer(dataStart, "copyImage() image data pointer", iFree);
+	uint dataToken = pushPointer(dataStart, "createImageFrom() image data pointer", iFree);
 	if(!dataStart){
 		printTitledError("memory allocation error", "could not allocate memory for new image");
 		(*destination).data = NULL;
@@ -6399,17 +6068,26 @@ FREEMONITORS(){
 			CRTC *const crtcWall = crtcCurrent + (*current).crtcAllocated;
 			jmp freeThreadObjects;
 			freeThreadObjects:{
-				if(pthread_cancel((*current).windowThread) != PTHREAD_CANCEL_SUCCESS){
-					printTitledError("pthread error", "could not cancel window thread");
+				if((*current).windowThreadCreated){
+					if(pthread_cancel((*current).windowThread) != PTHREAD_CANCEL_SUCCESS){
+						printTitledError("pthread error", "could not cancel window thread");
+					}
+					if(pthread_join((*current).windowThread, NULL) != PTHREAD_JOIN_SUCCESS){
+						printTitledError("pthread error", "could not join window thread");
+					}
+					(*current).windowThreadCreated = false;
 				}
-				if(pthread_join((*current).windowThread, NULL) != PTHREAD_JOIN_SUCCESS){
-					printTitledError("pthread error", "could not join window thread");
+				if((*current).windowCondCreated){
+					if(pthread_cond_destroy(&(*current).windowCond) != PTHREAD_COND_DESTROY_SUCCESS){
+						printTitledError("pthread error", "could not destroy window cond");
+					}
+					(*current).windowCondCreated = false;
 				}
-				if(pthread_cond_destroy(&(*current).windowCond) != PTHREAD_COND_DESTROY_SUCCESS){
-					printTitledError("pthread error", "could not destroy window cond");
-				}
-				if(pthread_mutex_destroy(&(*current).windowMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
-					printTitledError("pthread error", "could not destroy window mutex");
+				if((*current).windowMutexCreated){
+					if(pthread_mutex_destroy(&(*current).windowMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
+						printTitledError("pthread error", "could not destroy window mutex");
+					}
+					(*current).windowMutexCreated = false;
 				}
 				jmp freeCRTCDataLoop;
 			}
@@ -6443,45 +6121,23 @@ FREEMONITORS(){
 	}
 }
 TWOPASSBOXBLUR(){
-
-
-
-	/*!
-		we don't like this happening in a loop.
-
-		also update sizes there is no way some of these are accurate.
-	*/
-
 	uint32 *intermediateData;
-
 	uint32 *kernelColumnRStart;
 	uint32 *kernelColumnGStart;
 	uint32 *kernelColumnBStart;
-
 	uint32 *pixelRStart;
 	uint32 *pixelGStart;
 	uint32 *pixelBStart;
-
-
-
 	if(boxSize == 1){
 		ret;
 	}
-
-
-
 	intermediateData = malloc(width * height * sizeof(uint32));
-
 	kernelColumnRStart = malloc(boxSize + 2 * width * sizeof(uint32));
 	kernelColumnGStart = malloc(boxSize + 2 * width * sizeof(uint32));
 	kernelColumnBStart = malloc(boxSize + 2 * width * sizeof(uint32));
-
 	pixelRStart = malloc(boxSize + 2 * width * height * sizeof(uint32));
 	pixelGStart = malloc(boxSize + 2 * width * height * sizeof(uint32));
 	pixelBStart = malloc(boxSize + 2 * width * height * sizeof(uint32));
-
-
-
 	{
 		const int divisor = boxSize * boxSize;
 		const int boxDistanceFromZero = boxSize >> 1;
@@ -6743,46 +6399,337 @@ TWOPASSBOXBLUR(){
 			}
 		}
 	}
-
-
-
 	free(intermediateData);
-
 	free(kernelColumnRStart);
 	free(kernelColumnGStart);
 	free(kernelColumnBStart);
-
 	free(pixelRStart);
 	free(pixelGStart);
 	free(pixelBStart);
-
-
-
 	ret;
+}
+GETMONITORGAMMA(){
+	#define GAMMA_COOKIE_DATA_SIZE /*-*/ (16)
+	Monitor *monitorCurrent = monitorStart;
+	Monitor *monitorWall = monitorCurrent + monitorAllocated;
+	uint gammaCookieSize = GAMMA_COOKIE_DATA_SIZE;
+	uint gammaCookieAllocated = 0;
+	xcb_randr_get_crtc_gamma_cookie_t *cookieStart = malloc(gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t));
+	xcb_randr_get_crtc_gamma_cookie_t *cookieCurrent;
+	uint cookieToken = pushPointer(cookieStart, "getMonitorGamma() gamma cookie start pointer", iFree);
+	if(!cookieStart){
+		jmp setMonitorGammaDefaultLoop;
+		setMonitorGammaDefaultLoop:{
+			if(monitorCurrent < monitorWall){
+				CRTC *crtcCurrent = (*monitorCurrent).crtcStart;
+				CRTC *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+				jmp setCRTCGammaDefaultLoop;
+				setCRTCGammaDefaultLoop:{
+					if(crtcCurrent < crtcWall){
+						free((*crtcCurrent).dataStart);
+						popPointer((*crtcCurrent).dataToken);
+						(*crtcCurrent).dataStart = NULL;
+						(*crtcCurrent).dataToken = 0;
+						inc crtcCurrent;
+						jmp setCRTCGammaDefaultLoop;
+					}
+				}
+				inc monitorCurrent;
+				jmp setMonitorGammaDefaultLoop;
+			}
+			printTitledError("memory allocation error", "could not allocate memory for gamma cookies");
+			ret false;
+		}
+	}
+	jmp allocateCookiesLoop;
+	allocateCookiesLoop:{
+		if(monitorCurrent < monitorWall){
+			gammaCookieAllocated += (*monitorCurrent).crtcAllocated;
+			if(gammaCookieAllocated == gammaCookieSize){
+				void *temp;
+				gammaCookieSize += GAMMA_COOKIE_DATA_SIZE;
+				temp = realloc(cookieStart, gammaCookieSize * sizeof(xcb_randr_get_crtc_gamma_cookie_t));
+				updatePointer(cookieToken, temp);
+				if(!temp){
+					printTitledError("memory allocation error", "could not reallocate memory for gamma cookies");
+					free(cookieStart);
+					popPointer(cookieToken);
+					ret false;
+				}
+				cookieStart = temp;
+			}
+			inc monitorCurrent;
+			jmp allocateCookiesLoop;
+		}
+		cookieCurrent = cookieStart;
+		monitorCurrent = monitorStart;
+		jmp getMonitorCRTCGammaRequestLoop;
+	}
+	getMonitorCRTCGammaRequestLoop:{
+		if(monitorCurrent < monitorWall){
+			CRTC *crtcCurrent = (*monitorCurrent).crtcStart;
+			CRTC *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+			jmp getCRTCGammaRequestLoop;
+			getCRTCGammaRequestLoop:{
+				if(crtcCurrent < crtcWall){
+					*cookieCurrent = xcb_randr_get_crtc_gamma_unchecked(connection, (*crtcCurrent).crtc);
+					inc crtcCurrent;
+					inc cookieCurrent;
+					jmp getCRTCGammaRequestLoop;
+				}
+				inc monitorCurrent;
+				jmp getMonitorCRTCGammaRequestLoop;
+			}
+		}
+		cookieCurrent = cookieStart;
+		monitorCurrent = monitorStart;
+		jmp getMonitorCRTCGammaReplyLoop;
+	}
+	getMonitorCRTCGammaReplyLoop:{
+		if(monitorCurrent < monitorWall){
+			CRTC *crtcCurrent = (*monitorCurrent).crtcStart;
+			CRTC *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+			jmp getCRTCGammaReplyLoop;
+			getCRTCGammaReplyLoop:{
+				if(crtcCurrent < crtcWall){
+					xcb_randr_get_crtc_gamma_reply_t *const gammaReply = xcb_wait_for_reply(connection, *cookieCurrent, NULL);
+					uint gammaToken = pushPointer(gammaReply, "getMonitorGamma() gamma reply", iFree);
+					free((*crtcCurrent).dataStart);
+					popPointer((*crtcCurrent).dataToken);
+					(*crtcCurrent).dataStart = gammaReply;
+					(*crtcCurrent).dataToken = gammaToken;
+					if(gammaReply){
+						double redGamma;
+						double greenGamma;
+						double blueGamma;
+						uint16 *red = xcb_randr_get_crtc_gamma_red(gammaReply);
+						uint16 *green = xcb_randr_get_crtc_gamma_green(gammaReply);
+						uint16 *blue = xcb_randr_get_crtc_gamma_blue(gammaReply);
+						(*crtcCurrent).red = red;
+						(*crtcCurrent).green = green;
+						(*crtcCurrent).blue = blue;
+						(*crtcCurrent).gammaSize = xcb_randr_get_crtc_gamma_red_length(gammaReply);
+						if((*crtcCurrent).gammaSize < 2 or (*crtcCurrent).gammaSize > 65536){
+							printTitledError("gamma size error", "gamma size not in [2, 65536]");
+						}else{
+							uint gammaSize = (*crtcCurrent).gammaSize;
+							double brightness;
+							double input0;
+							double value0;
+							double input1;
+							double value1;
+							uint middleObservation;
+							uint lastRedObservation = findLastNonClamped(red, gammaSize);
+							uint lastGreenObservation = findLastNonClamped(green, gammaSize);
+							uint lastBlueObservation = findLastNonClamped(blue, gammaSize);
+							uint16 *bestColorArray = red;
+							uint bestLastObservation = lastRedObservation;
+							if(lastGreenObservation > bestLastObservation){
+								bestColorArray = green;
+								bestLastObservation = lastGreenObservation;
+							}
+							if(lastBlueObservation > bestLastObservation){
+								bestColorArray = blue;
+								bestLastObservation = lastBlueObservation;
+							}
+							middleObservation = bestLastObservation / 2;
+							input0 = (double)(middleObservation + 1) / gammaSize;
+							value0 = (double)(*(bestColorArray + middleObservation)) / 65535;
+							input1 = (double)(bestLastObservation + 1) / gammaSize;
+							value1 = (double)(*(bestColorArray + bestLastObservation)) / 65535;
+							if(roundDouble(value1) < 0.01){
+								brightness = 0.0;
+								redGamma = 1.0;
+								greenGamma = 1.0;
+								blueGamma = 1.0;
+							}else{
+								if(bestLastObservation + 1 == gammaSize){
+									brightness = value1;
+								}else{
+									brightness = exp((ln(input1) * ln(value0) - ln(input0) * ln(value1)) / (ln(input1) - ln(input0)));
+								}
+								brightness = roundDouble(brightness);
+								redGamma = ln((double)*(red + lastRedObservation / 2) / brightness / 65535) / ln(((double)lastRedObservation / 2 + 1) / gammaSize);
+								greenGamma = ln((double)*(green + lastGreenObservation / 2) / brightness / 65535) / ln(((double)lastGreenObservation / 2 + 1) / gammaSize);
+								blueGamma = ln((double)*(blue + lastBlueObservation / 2) / brightness / 65535) / ln(((double)lastBlueObservation / 2 + 1) / gammaSize);
+								redGamma = roundDouble(redGamma);
+								greenGamma = roundDouble(greenGamma);
+								blueGamma = roundDouble(blueGamma);
+								if(!redGamma){
+									redGamma = 1.0;
+								}
+								if(!greenGamma){
+									greenGamma = 1.0;
+								}
+								if(!blueGamma){
+									blueGamma = 1.0;
+								}
+							}
+							(*crtcCurrent).brightness = brightness;
+							(*crtcCurrent).redGamma = redGamma;
+							(*crtcCurrent).greenGamma = greenGamma;
+							(*crtcCurrent).blueGamma = blueGamma;
+						}
+					}
+					inc crtcCurrent;
+					inc cookieCurrent;
+					jmp getCRTCGammaReplyLoop;
+				}
+			}
+			inc monitorCurrent;
+			jmp getMonitorCRTCGammaReplyLoop;
+		}
+		free(cookieStart);
+		popPointer(cookieToken);
+		ret true;
+	}
+	#undef  GAMMA_COOKIE_DATA_SIZE
+}
+FINDLASTNONCLAMPED(){
+	const uint16 *const start = current - size;
+	jmp loop;
+	loop:{
+		if(dec current >= start){
+			if(*current < 65535){
+				ret current - start;
+			}
+			jmp loop;
+		}
+		ret 1;
+	}
+}
+ROUNDDOUBLE(){
+	double doubleNumber;
+	number *= 100;
+	doubleNumber = (int)number;
+	ret doubleNumber / 100 + (number - doubleNumber >= 0.5) * 0.01;
+}
+SETMONITORGAMMA(){
+	Monitor *monitorCurrent;
+	Monitor *monitorWall;
+	double newDoubleBrightness = (double)newBrightness / 100;
+	switch operation over
+		to SET_BRIGHTNESS_OPERATION: /*------*/ brk;
+		to INCREASE_BRIGHTNESS_OPERATION: /*-*/ brk;
+		to DECREASE_BRIGHTNESS_OPERATION: /*-*/ brk;
+		off: /*------------------------------*/ ret;
+	end
+	switch whichMonitorUpdates over
+		to POINTER_WHICH_MONITOR:{
+			monitorCurrent = getPointerMonitor();
+			monitorWall = monitorCurrent + 1;
+			jmp setMonitorGammaLoop;
+		}
+		to ALL_WHICH_MONITOR:{
+			monitorCurrent = monitorStart;
+			monitorWall = monitorCurrent + monitorAllocated;
+			jmp setMonitorGammaLoop;
+		}
+		off:{
+			ret;
+		}
+	end
+	setMonitorGammaLoop:{
+		if(monitorCurrent < monitorWall){
+			CRTC *crtcCurrent = (*monitorCurrent).crtcStart;
+			CRTC *const crtcWall = crtcCurrent + (*monitorCurrent).crtcAllocated;
+			double averageBrightness = 0.0;
+			uint brightnessCounter = 0;
+			jmp setCRTCGammaLoop;
+			setCRTCGammaLoop:{
+				if(crtcCurrent < crtcWall){
+					const double gammaSize = (*crtcCurrent).gammaSize;
+					const double gammaMinusOne = gammaSize - 1;
+					const double redGamma = (*crtcCurrent).redGamma;
+					const double greenGamma = (*crtcCurrent).greenGamma;
+					const double blueGamma = (*crtcCurrent).blueGamma;
+					uint16 *red = (*crtcCurrent).red;
+					uint16 *green = (*crtcCurrent).green;
+					uint16 *blue = (*crtcCurrent).blue;
+					double brightness = (*crtcCurrent).brightness;
+					double currentGamma = 0.0;
+					if(!(*crtcCurrent).dataStart){
+						inc crtcCurrent;
+						jmp setCRTCGammaLoop;
+					}
+					switch operation over
+						to SET_BRIGHTNESS_OPERATION: /*------*/ brightness = newDoubleBrightness; /*--*/ brk;
+						to INCREASE_BRIGHTNESS_OPERATION: /*-*/ brightness += newDoubleBrightness; /*-*/ brk;
+						to DECREASE_BRIGHTNESS_OPERATION: /*-*/ brightness -= newDoubleBrightness; /*-*/ brk;
+						off: /*------------------------------*/ /*------------------------------------*/ ret;
+					end
+					if(brightness > 1.0){
+						brightness = 1.0;
+					}elif(brightness < 0.0){
+						brightness = 0.0;
+					}
+					(*crtcCurrent).brightness = brightness;
+					averageBrightness += brightness;
+					inc brightnessCounter;
+					jmp setCRTCGammaInputsLoop;
+					setCRTCGammaInputsLoop:{
+						const double input = currentGamma / gammaMinusOne;
+						double redExponential;
+						double greenExponential;
+						double blueExponential;
+						if(redGamma == 1.0){
+							redExponential = input;
+						}else{
+							redExponential = pow(input, redGamma);
+						}
+						if(greenGamma == 1.0){
+							greenExponential = input;
+						}else{
+							greenExponential = pow(input, redGamma);
+						}
+						if(blueGamma == 1.0){
+							blueExponential = input;
+						}else{
+							blueExponential = pow(input, redGamma);
+						}
+						*red = min(redExponential * brightness, 1.0) * 65535.0;
+						*green = min(greenExponential * brightness, 1.0) * 65535.0;
+						*blue = min(blueExponential * brightness, 1.0) * 65535.0;
+						if(inc currentGamma < gammaSize){
+							inc red;
+							inc green;
+							inc blue;
+							jmp setCRTCGammaInputsLoop;
+						}
+						if(changeGamma){
+							xcb_randr_set_crtc_gamma(connection, (*crtcCurrent).crtc, (*crtcCurrent).gammaSize, (*crtcCurrent).red, (*crtcCurrent).green, (*crtcCurrent).blue);
+						}
+						inc crtcCurrent;
+						jmp setCRTCGammaLoop;
+					}
+				}
+			}
+			{
+				const double monitorBrightness = averageBrightness * 100 / brightnessCounter;
+				(*monitorCurrent).previousBrightness = (*monitorCurrent).brightness;
+				if((*monitorCurrent).previousBrightness == -1){
+					(*monitorCurrent).previousBrightness = monitorBrightness;
+				}
+				(*monitorCurrent).brightness = monitorBrightness;
+			}
+			inc monitorCurrent;
+			jmp setMonitorGammaLoop;
+		}
+		xcb_flush(connection);
+		ret;
+	}
+}
+MIN(){
+	if(x < y){
+		ret x;
+	}
+	ret y;
 }
 CANCELTHREADS(){
 	Monitor *current = monitorStart;
 	Monitor *const wall = current + monitorAllocated;
-	jmp cancelSleepThread;
-	cancelSleepThread:{
-		if(sleepThreadCreated){
-			if(pthread_cancel(sleepThread) != PTHREAD_CANCEL_SUCCESS){
-				printTitledError("pthread error", "could not cancel sleep thread");
-			}
-			if(pthread_join(sleepThread, NULL) != PTHREAD_JOIN_SUCCESS){
-				printTitledError("pthread error", "could not join sleep thread");
-			}
-			if(pthread_cond_destroy(&sleepCond) != PTHREAD_COND_DESTROY_SUCCESS){
-				printTitledError("pthread error", "could not destroy sleep cond");
-			}
-			if(pthread_mutex_destroy(&sleepMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
-				printTitledError("pthread error", "could not destroy sleep mutex");
-			}
-			sleepThreadCreated = false;
-		}
-		jmp cancelWindowThreadLoop;
-	}
-	cancelWindowThreadLoop:{
+	jmp destroyMonitorThreadObjectsLoop;
+	destroyMonitorThreadObjectsLoop:{
 		if(current < wall){
 			if((*current).windowThreadCreated){
 				if(pthread_cancel((*current).windowThread) != PTHREAD_CANCEL_SUCCESS){
@@ -6791,23 +6738,63 @@ CANCELTHREADS(){
 				if(pthread_join((*current).windowThread, NULL) != PTHREAD_JOIN_SUCCESS){
 					printTitledError("pthread error", "could not join window thread");
 				}
+				(*current).windowThreadCreated = false;
+			}
+			if((*current).windowCondCreated){
 				if(pthread_cond_destroy(&(*current).windowCond) != PTHREAD_COND_DESTROY_SUCCESS){
 					printTitledError("pthread error", "could not destroy window cond");
 				}
+				(*current).windowCondCreated = false;
+			}
+			if((*current).windowMutexCreated){
 				if(pthread_mutex_destroy(&(*current).windowMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
 					printTitledError("pthread error", "could not destroy window mutex");
 				}
+				(*current).windowMutexCreated = false;
 			}
 			inc current;
-			jmp cancelWindowThreadLoop;
+			jmp destroyMonitorThreadObjectsLoop;
+		}
+		jmp destroyGlobalThreadObjects;
+	}
+	destroyGlobalThreadObjects:{
+		if(sleepThreadCreated){
+			if(pthread_cancel(sleepThread) != PTHREAD_CANCEL_SUCCESS){
+				printTitledError("pthread error", "could not cancel sleep thread");
+			}
+			if(pthread_join(sleepThread, NULL) != PTHREAD_JOIN_SUCCESS){
+				printTitledError("pthread error", "could not join sleep thread");
+			}
+			sleepThreadCreated = false;
+		}
+		if(sleepCondCreated){
+			if(pthread_cond_destroy(&sleepCond) != PTHREAD_COND_DESTROY_SUCCESS){
+				printTitledError("pthread error", "could not destroy sleep cond");
+			}
+			sleepCondCreated = false;
+		}
+		if(sleepMutexCreated){
+			if(pthread_mutex_destroy(&sleepMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
+				printTitledError("pthread error", "could not destroy sleep mutex");
+			}
+			sleepMutexCreated = false;
+		}
+		if(globalsLockCreated){
+			if(pthread_rwlock_destroy(&globalsLock) != PTHREAD_RWLOCK_DESTROY_SUCCESS){
+				printTitledError("pthread error", "could not destroy globals lock");
+			}
+			globalsLockCreated = false;
 		}
 		ret;
 	}
 }
 CLEANUP(){
 	deleteMemoryManager();
-	if(pthread_mutex_destroy(&memorySegmentMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
-		printTitledError("pthread error", "could not destroy memory segment mutex");
+	if(memorySegmentMutexCreated){
+		if(pthread_mutex_destroy(&memorySegmentMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
+			printTitledError("pthread error", "could not destroy memory segment mutex");
+		}
+		memorySegmentMutexCreated = false;
 	}
 	closeErrorStream();
 	ret;
@@ -6872,7 +6859,7 @@ PRINTTITLEDNAMEDERROR(){
 	printError("%s%s: %s%s:%s %s %s\n", colorStart, programName, colorError, title, colorEnd, message, name);
 	ret;
 }
-PRINTERROREVENT(){
+PRINTXERROREVENT(){
 	#define error /*-*/ ((xcb_generic_error_t *)event)
 	printError("%s%s: %sxcb error event:%s %s error in %s operation with a minor of %u and sequence %u\n", colorStart, programName, colorError, colorEnd, *(errorCodeName + ((*error).error_code > 17? 0 : (*error).error_code)), *(majorCodeName + ((*error).major_code > 127? 0 : (*error).major_code)), (*error).minor_code, (*error).sequence);
 	ret;
