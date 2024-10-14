@@ -324,7 +324,7 @@ SOFTWARE. */
 	#define GETTIMESTAMP() /*----------------------------*/ local xcb_timestamp_t  getTimestamp(void)
 	#define GETPOINTERMONITOR() /*-----------------------*/ local Monitor *        getPointerMonitor(void)
 	#define CREATEIMAGEFROM() /*-------------------------*/ local void             createImageFrom(Image *const source, Image *const destination)
-	#define COMPOSITEIMAGES() /*-------------------------*/ local void             compositeImages(void (*const operation)(const uint32 *const, uint32 *const), const int sourceX, const int sourceY, Image *const source, const int destinationX, const int destinationY, Image *const destination)
+	#define COMPOSITEIMAGES() /*-------------------------*/ local void             compositeImages(void (*const operation)(const uint32 *const, uint32 *const), const int sourceX, const int sourceY, Image *const source, int destinationX, int destinationY, Image *const destination)
 	#define COMPOSITEIMAGESOVER() /*---------------------*/ local void             compositeImagesOver(const uint32 *const source, uint32 *const destination)
 	#define COMPOSITEIMAGESAND() /*----------------------*/ local void             compositeImagesAnd(const uint32 *const source, uint32 *const destination)
 	#define TWOPASSBOXBLUR() /*--------------------------*/ local void             twoPassBoxBlur(const int width, const int height, const int boxSize, uint32 *destinationData)
@@ -492,6 +492,8 @@ SOFTWARE. */
 		int32 /*---------------*/ y;
 		int32 /*---------------*/ width;
 		int32 /*---------------*/ height;
+		uint8 /*---------------*/ operation;
+		uint8 /*---------------*/ pad0[7];
 	} Image;
 
 	def struct{
@@ -633,7 +635,7 @@ SOFTWARE. */
 	local StringNodeRoot /*---------------*/ horizontalAlignmentRoot;
 	local StringNodeRoot /*---------------*/ verticalAlignmentRoot;
 	local StringNodeRoot /*---------------*/ whichMonitorRoot;
-	local StringNodeRoot /*---------------*/ compositeImagesOperationRoot;
+	local StringNodeRoot /*---------------*/ imageCompositionOperationRoot;
 	local StringNodeRoot /*---------------*/ imageVariableRoot;
 	local StringNodeRoot /*---------------*/ modifierRoot;
 	local StringNodeRoot /*---------------*/ macroRoot;
@@ -775,7 +777,7 @@ SOFTWARE. */
 		, "all"
 		, NULL
 	};
-	local const char *const /*------------*/ compositeImagesOperationList[] = {
+	local const char *const /*------------*/ imagesCompositionOperationList[] = {
 		  "none"
 		, "over"
 		, "and"
@@ -857,11 +859,11 @@ SOFTWARE. */
 	local const Instruction /*------------*/ whichMonitorShowsSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ foregroundColorSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ backgroundColorSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
-	local const Instruction /*------------*/ unchangedBrightnessImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
-	local const Instruction /*------------*/ increasedBrightnessImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
-	local const Instruction /*------------*/ decreasedBrightnessImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
-	local const Instruction /*------------*/ commonOverlayImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
-	local const Instruction /*------------*/ commonUnderlayImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ unchangedBrightnessImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, NAME_LIST_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ increasedBrightnessImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, NAME_LIST_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ decreasedBrightnessImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, NAME_LIST_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ commonOverlayImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, NAME_LIST_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
+	local const Instruction /*------------*/ commonUnderlayImageSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, IMAGE_INSTRUCTION_TYPE, NAME_LIST_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ blurSizeSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ durationSetSubinstruction[] = {NAME_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
 	local const Instruction /*------------*/ executeGrabKeycodeSubinstruction[] = {NAME_LIST_INSTRUCTION_TYPE, NUMBER_INSTRUCTION_TYPE, NAME_INSTRUCTION_TYPE, EXECUTE_INSTRUCTION_TYPE, END_INSTRUCTION_TYPE};
@@ -880,7 +882,7 @@ SOFTWARE. */
 	local StringNodeRoot *const /*--------*/ doInstructionData[] = {&commandRoot};
 	local StringNodeRoot *const /*--------*/ setInstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ createImageFromInstructionData[] = {&imageVariableRoot, &imageVariableRoot};
-	local StringNodeRoot *const /*--------*/ compositeImagesInstructionData[] = {&compositeImagesOperationRoot, &imageVariableRoot};
+	local StringNodeRoot *const /*--------*/ compositeImagesInstructionData[] = {&imageCompositionOperationRoot, &imageVariableRoot};
 	local StringNodeRoot *const /*--------*/ grabKeycodeInstructionData[] = {&modifierRoot, &commandRoot};
 	local StringNodeRoot *const /*--------*/ grabButtonInstructionData[] = {&modifierRoot, &commandRoot};
 	local StringNodeRoot *const /*--------*/ ungrabKeycodeInstructionData[] = {&modifierRoot};
@@ -903,11 +905,11 @@ SOFTWARE. */
 	local StringNodeRoot *const /*--------*/ whichMonitorShowsSetSubinstructionData[] = {&variableRoot, &whichMonitorRoot};
 	local StringNodeRoot *const /*--------*/ foregroundColorSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ backgroundColorSetSubinstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ unchangedBrightnessImageSetSubinstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ increasedBrightnessImageSetSubinstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ decreasedBrightnessImageSetSubinstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ commonOverlayImageSetSubinstructionData[] = {&variableRoot};
-	local StringNodeRoot *const /*--------*/ commonUnderlayImageSetSubinstructionData[] = {&variableRoot};
+	local StringNodeRoot *const /*--------*/ unchangedBrightnessImageSetSubinstructionData[] = {&variableRoot, &imageCompositionOperationRoot};
+	local StringNodeRoot *const /*--------*/ increasedBrightnessImageSetSubinstructionData[] = {&variableRoot, &imageCompositionOperationRoot};
+	local StringNodeRoot *const /*--------*/ decreasedBrightnessImageSetSubinstructionData[] = {&variableRoot, &imageCompositionOperationRoot};
+	local StringNodeRoot *const /*--------*/ commonOverlayImageSetSubinstructionData[] = {&variableRoot, &imageCompositionOperationRoot};
+	local StringNodeRoot *const /*--------*/ commonUnderlayImageSetSubinstructionData[] = {&variableRoot, &imageCompositionOperationRoot};
 	local StringNodeRoot *const /*--------*/ blurSizeSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ durationSetSubinstructionData[] = {&variableRoot};
 	local StringNodeRoot *const /*--------*/ executeGrabKeycodeSubinstructionData[] = {&modifierRoot, &commandRoot};
@@ -1336,7 +1338,7 @@ EXITCOMMAND(){
 	deleteStringRoot(&macroRoot);
 	deleteStringRoot(&modifierRoot);
 	deleteStringRoot(&imageVariableRoot);
-	deleteStringRoot(&compositeImagesOperationRoot);
+	deleteStringRoot(&imageCompositionOperationRoot);
 	deleteStringRoot(&whichMonitorRoot);
 	deleteStringRoot(&verticalAlignmentRoot);
 	deleteStringRoot(&horizontalAlignmentRoot);
@@ -1361,7 +1363,13 @@ EXITCOMMAND(){
 
 
 
-local bool quittingThreads;
+	local bool quittingThreads;
+
+
+
+	#define NONE_IMAGE_OPERATION /*-*/ (b(00))
+	#define OVER_IMAGE_OPERATION /*-*/ (b(01))
+	#define AND_IMAGE_OPERATION /*--*/ (b(10))
 
 
 
@@ -1445,7 +1453,7 @@ int main(int argumentAmount, const char *const *argument){
 		setStringRoot(&horizontalAlignmentRoot);
 		setStringRoot(&verticalAlignmentRoot);
 		setStringRoot(&whichMonitorRoot);
-		setStringRoot(&compositeImagesOperationRoot);
+		setStringRoot(&imageCompositionOperationRoot);
 		setStringRoot(&imageVariableRoot);
 		setStringRoot(&modifierRoot);
 		setStringRoot(&macroRoot);
@@ -2097,7 +2105,7 @@ int main(int argumentAmount, const char *const *argument){
 		bulkInsertString(&horizontalAlignmentRoot, horizontalAlignmentList);
 		bulkInsertString(&verticalAlignmentRoot, verticalAlignmentList);
 		bulkInsertString(&whichMonitorRoot, whichMonitorList);
-		bulkInsertString(&compositeImagesOperationRoot, compositeImagesOperationList);
+		bulkInsertString(&imageCompositionOperationRoot, imagesCompositionOperationList);
 		bulkInsertString(&imageVariableRoot, imageVariableList);
 		bulkInsertString(&modifierRoot, modifierList);
 		bulkInsertString(&macroRoot, macroList);
@@ -2908,6 +2916,8 @@ DRAWWINDOWMAIN(){
 	ret NULL;
 }
 DRAWWINDOW(){
+	const uint brightness = (*monitor).brightness;
+	const uint previousBrightness = (*monitor).previousBrightness;
 	Image image;
 	image.size = width * height * sizeof(uint32);
 	image.data = (*monitor).dataStart;
@@ -2950,7 +2960,15 @@ DRAWWINDOW(){
 
 	/*! make this completely something the user could make via the conf */
 
-	/*! if the blur fails to work then it will not apply anything on the image and the background will be set to the underlay image */
+	/*!
+		consider the stack for how the final result should look like, from bottom to top:
+			-blur
+			-underlay
+			-unchanged/increased/decreased
+			-overlay
+
+			with this stack, it should be easily visible that should the user want to perform one or more composition operations he should specify them minding the stack. but what about direction?
+	*/
 
 
 
@@ -2960,10 +2978,6 @@ DRAWWINDOW(){
 
 
 
-	if(commonUnderlayImage.data){
-		void (*const operation)(const uint32 *const, uint32 *const) = &compositeImagesOver;
-		compositeImages(operation, commonUnderlayImage.x, commonUnderlayImage.y, &commonUnderlayImage, 0, 0, &image);
-	}
 	if(blurSize > 1){
 		xcb_get_image_reply_t *reply;
 		uint token;
@@ -2996,7 +3010,7 @@ DRAWWINDOW(){
 
 
 
-			/*! what about source x, y here? */
+			/*! what about x, y here? */
 			compositeImages(&compositeImagesOver, 0, 0, &tempImage, 0, 0, &image);
 
 
@@ -3005,18 +3019,40 @@ DRAWWINDOW(){
 			popPointer(token);
 		}
 	}
-	if(commonUnderlayImage.data){
-		void (*const operation)(const uint32 *const, uint32 *const) = &compositeImagesAnd;
-		compositeImages(operation, commonUnderlayImage.x, commonUnderlayImage.y, &commonUnderlayImage, 0, 0, &image);
+
+
+
+
+
+
+
+
+
+	/*! consider using the image operation variable in compositeImages() to do all operations at the same time */
+
+	if(commonUnderlayImage.data and commonUnderlayImage.operation){
+		if(commonUnderlayImage.operation & OVER_IMAGE_OPERATION){
+			compositeImages(&compositeImagesOver, 0, 0, &commonUnderlayImage, commonUnderlayImage.x, commonUnderlayImage.y, &image);
+		}
+		if(commonUnderlayImage.operation & AND_IMAGE_OPERATION){
+			compositeImages(&compositeImagesAnd, 0, 0, &commonUnderlayImage, commonUnderlayImage.x, commonUnderlayImage.y, &image);
+		}
 	}
+
+
+
+
+
+
+
+
+
 	{
 		Image *operationImage = &unchangedBrightnessImage;
-		uint brightness = (*monitor).brightness;
-		uint previousBrightness = (*monitor).previousBrightness;
 
 
 
-		/*! causes stuttering */
+		/*! brightnessLock causes stuttering */
 
 		if(brightnessLock){
 			if(brightness > previousBrightness){
@@ -3026,15 +3062,23 @@ DRAWWINDOW(){
 			}
 		}
 		if((*operationImage).data){
-			compositeImages(&compositeImagesOver, (*operationImage).x, (*operationImage).y, operationImage, 0, 0, &image);
+			compositeImages(&compositeImagesOver, 0, 0, operationImage, (*operationImage).x, (*operationImage).y, &image);
 		}
+	}
 
 
 
-		if(commonOverlayImage.data){
-			const uint percentage = (100 - brightness) * commonOverlayImage.height / 100;
-			compositeImages(&compositeImagesOver, commonOverlayImage.x, commonOverlayImage.y + percentage, &commonOverlayImage, 0, (image.height - commonOverlayImage.height) / 2 + percentage, &image);
-		}
+
+
+
+
+
+
+	/*! this is gonna be a mess */
+
+	if(commonOverlayImage.data){
+		const uint percentage = (100 - brightness) * commonOverlayImage.height / 100;
+		compositeImages(&compositeImagesOver, commonOverlayImage.x, commonOverlayImage.y + percentage, &commonOverlayImage, 0, (image.height - commonOverlayImage.height) / 2 + percentage, &image);
 	}
 
 
@@ -4502,6 +4546,7 @@ READCONFIG(){
 					unchangedBrightnessImage = image0Return;
 					unchangedBrightnessImage.x = integer0Return;
 					unchangedBrightnessImage.y = integer1Return;
+					unchangedBrightnessImage.operation = nameList0Return;
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
 					jmp setInstructionExit;
@@ -4510,6 +4555,7 @@ READCONFIG(){
 					increasedBrightnessImage = image0Return;
 					increasedBrightnessImage.x = integer0Return;
 					increasedBrightnessImage.y = integer1Return;
+					increasedBrightnessImage.operation = nameList0Return;
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
 					jmp setInstructionExit;
@@ -4518,6 +4564,7 @@ READCONFIG(){
 					decreasedBrightnessImage = image0Return;
 					decreasedBrightnessImage.x = integer0Return;
 					decreasedBrightnessImage.y = integer1Return;
+					decreasedBrightnessImage.operation = nameList0Return;
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
 					jmp setInstructionExit;
@@ -4526,6 +4573,7 @@ READCONFIG(){
 					commonOverlayImage = image0Return;
 					commonOverlayImage.x = integer0Return;
 					commonOverlayImage.y = integer1Return;
+					commonOverlayImage.operation = nameList0Return;
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
 					jmp setInstructionExit;
@@ -4534,6 +4582,7 @@ READCONFIG(){
 					commonUnderlayImage = image0Return;
 					commonUnderlayImage.x = integer0Return;
 					commonUnderlayImage.y = integer1Return;
+					commonUnderlayImage.operation = nameList0Return;
 					image0Return.data = NULL;
 					image0Return.dataToken = 0;
 					jmp setInstructionExit;
@@ -6021,37 +6070,46 @@ CREATEIMAGEFROM(){
 		(*destination).dataToken = 0;
 		ret;
 	}
+	*destination = *source;
 	(*destination).data = dataStart;
 	(*destination).dataToken = dataToken;
-	(*destination).size = (*source).size;
-	(*destination).x = (*source).x;
-	(*destination).y = (*source).y;
-	(*destination).width = (*source).width;
-	(*destination).height = (*source).height;
 	copyMemory((*source).data, (*destination).data, (*destination).size);
 	ret;
 }
 COMPOSITEIMAGES(){
-	const int sourceIntersectionWidth = (*source).width - sourceX;
-	const int sourceIntersectionHeight = (*source).height - sourceY;
-	const int destinationIntersectionWidth = (*destination).width - destinationX;
-	const int destinationIntersectionHeight = (*destination).height - destinationY;
-	int intersectionWidth = sourceIntersectionWidth;
-	int intersectionHeight = sourceIntersectionHeight;
+	int intersectionWidth;
+	int intersectionHeight;
 	uint32 *sourceCurrent;
 	uint32 *sourceWidthWall;
 	uint32 *sourceWall;
 	uint32 *destinationCurrent;
-	if(destinationIntersectionWidth < sourceIntersectionWidth){
-		intersectionWidth = destinationIntersectionWidth;
-	}
-	if(destinationIntersectionHeight < sourceIntersectionHeight){
-		intersectionHeight = destinationIntersectionHeight;
-	}
-	if(intersectionWidth < 1 or intersectionHeight < 1){
+	if(sourceX < 0 or sourceY < 0 or sourceX >= (*source).width or sourceY >= (*source).height){
 		ret;
 	}
+	{
+		const int b1lx = 0;
+		const int b1ty = 0;
+		const int b1rx = (*destination).width;
+		const int b1by = (*destination).height;
+		const int b2lx = destinationX;
+		const int b2ty = destinationY;
+		const int b2rx = b2lx + (*source).width - sourceX;
+		const int b2by = b2ty + (*source).height - sourceY;
+		intersectionWidth = (b1rx < b2rx? b1rx : b2rx) - (b1lx > b2lx? b1lx : b2lx);
+		intersectionHeight = (b1by < b2by? b1by : b2by) - (b1ty > b2ty? b1ty : b2ty);
+		if(intersectionWidth < 1 or intersectionWidth < 1){
+			ret;
+		}
+	}
 	sourceCurrent = (uint32 *)(*source).data + sourceY * (*source).width + sourceX;
+	if(destinationX < 0){
+		sourceCurrent -= destinationX;
+		destinationX = 0;
+	}
+	if(destinationY < 0){
+		sourceCurrent -= destinationY * (*source).width;
+		destinationY = 0;
+	}
 	sourceWidthWall = sourceCurrent + intersectionWidth;
 	sourceWall = sourceCurrent + intersectionHeight * (*source).width;
 	destinationCurrent = (uint32 *)(*destination).data + destinationY * (*destination).width + destinationX;
