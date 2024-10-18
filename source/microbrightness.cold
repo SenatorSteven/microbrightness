@@ -5,11 +5,11 @@
 */
 
 /*!
-	interrupting can still ungracefully close program. use `sleep 3; kill -INT $(pgrep microbrightness)`. likely a thread issue, and therefore perhaps a monitor issue.
+	exit command can and will softlock.
 */
 
 /*!
-	what REALLY happens when monitors update? investigate.
+	interrupting can still ungracefully close program. use `sleep 3; kill -INT $(pgrep microbrightness)`. likely a thread issue, and therefore perhaps a monitor issue.
 */
 
 /*!
@@ -105,15 +105,22 @@ SOFTWARE. */
 	#define PTHREAD_CREATE_SUCCESS /*--------------------*/ (0)
 	#define PTHREAD_SETCANCELSTATE_SUCCESS /*------------*/ (0)
 	#define PTHREAD_SETCANCELTYPE_SUCCESS /*-------------*/ (0)
+	#define PTHREAD_MUTEXATTR_INIT_SUCCESS /*------------*/ (0)
+	#define PTHREAD_MUTEXATTR_SETPSHARED_SUCCESS /*------*/ (0)
+	#define PTHREAD_MUTEXATTR_DESTROY_SUCCESS /*---------*/ (0)
 	#define PTHREAD_MUTEX_INIT_SUCCESS /*----------------*/ (0)
 	#define PTHREAD_MUTEX_LOCK_SUCCESS /*----------------*/ (0)
 	#define PTHREAD_MUTEX_TRYLOCK_SUCCESS /*-------------*/ (0)
 	#define PTHREAD_MUTEX_UNLOCK_SUCCESS /*--------------*/ (0)
 	#define PTHREAD_MUTEX_DESTROY_SUCCESS /*-------------*/ (0)
+	#define PTHREAD_CONDATTR_INIT_SUCCESS /*-------------*/ (0)
+	#define PTHREAD_CONDATTR_SETPSHARED_SUCCESS /*-------*/ (0)
+	#define PTHREAD_CONDATTR_DESTROY_SUCCESS /*----------*/ (0)
 	#define PTHREAD_COND_INIT_SUCCESS /*-----------------*/ (0)
 	#define PTHREAD_COND_WAIT_SUCCESS /*-----------------*/ (0)
 	#define PTHREAD_COND_TIMEDWAIT_SUCCESS /*------------*/ (0)
 	#define PTHREAD_COND_SIGNAL_SUCCESS /*---------------*/ (0)
+	#define PTHREAD_COND_BROADCAST_SUCCESS /*------------*/ (0)
 	#define PTHREAD_COND_DESTROY_SUCCESS /*--------------*/ (0)
 	#define PTHREAD_RWLOCKATTR_INIT_SUCCESS /*-----------*/ (0)
 	#define PTHREAD_RWLOCKATTR_SETKIND_NP_SUCCESS /*-----*/ (0)
@@ -291,8 +298,8 @@ SOFTWARE. */
 	#define IDENTIFYARGUMENT() /*------------------------*/ local uint8            identifyArgument(const char *p)
 	#define INSENSITIVESTRINGCOMPARE() /*----------------*/ local bool             insensitiveStringCompare(const char *s0, const char *s1)
 	#define SENSITIVESTRINGCOMPARE() /*------------------*/ local bool             sensitiveStringCompare(const char *s0, const char *s1)
-	#define SLEEPMAIN() /*-------------------------------*/ local void *           sleepMain(void *arg)
-	#define DRAWWINDOWMAIN() /*--------------------------*/ local void *           drawWindowMain(void *arg)
+	#define SLEEPMAIN() /*-------------------------------*/ local void *           sleepMain(void *const arg)
+	#define DRAWWINDOWMAIN() /*--------------------------*/ local void *           drawWindowMain(void *const arg)
 	#define DRAWWINDOW() /*------------------------------*/ local void             drawWindow(Monitor *const monitor)
 	#define SETSTRINGROOT() /*---------------------------*/ local void             setStringRoot(StringNodeRoot *root)
 	#define BULKINSERTSTRING() /*------------------------*/ local void             bulkInsertString(StringNodeRoot *root, const char *const *current)
@@ -313,7 +320,8 @@ SOFTWARE. */
 	#define READIMAGE() /*-------------------------------*/ local uint8            readImage(const char *const path, const char **errorMessage, Image *image)
 	#define EXEC() /*------------------------------------*/ local void             exec(const char *const string)
 	#define SETMEMORY() /*-------------------------------*/ local void             setMemory(void *const destinationStart, const uint64 value, const uint itemAmount, const uint8 perByteAmount)
-	#define COPYMEMORY() /*------------------------------*/ local void             copyMemory(void *const sourceStart, void *const destinationStart, const uint byteAmount)
+	#define COPYMEMORY() /*------------------------------*/ local void             copyMemory(const void *const sourceStart, void *const destinationStart, const uint byteAmount)
+	#define FINDSTRINGLENGTH() /*------------------------*/ local uint             findStringLength(const char *string)
 	#define GETTIMESTAMP() /*----------------------------*/ local xcb_timestamp_t  getTimestamp(void)
 	#define GETPOINTERMONITOR() /*-----------------------*/ local Monitor *        getPointerMonitor(void)
 	#define CREATEIMAGEFROM() /*-------------------------*/ local void             createimagefrom(Image *const source, Image *const destination)
@@ -321,10 +329,18 @@ SOFTWARE. */
 	#define COMPOSITEIMAGESOVER() /*---------------------*/ local void             compositeImagesOver(const uint32 *const source, uint32 *const destination)
 	#define COMPOSITEIMAGESAND() /*----------------------*/ local void             compositeImagesAnd(const uint32 *const source, uint32 *const destination)
 	#define TWOPASSBOXBLUR() /*--------------------------*/ local void             twoPassBoxBlur(const int width, const int height, const int boxSize, uint32 *destinationData)
+	#define SETCONFIGVARIABLES() /*----------------------*/ local void             setConfigVariables(void)
+	#define SETWINDOWPROPERTIES() /*---------------------*/ local void             setWindowProperties(void)
+	#define SETBRIGHTNESSCOMMAND() /*--------------------*/ local void             setBrightnessCommand(const int newBrightness)
+	#define INCREASEBRIGHTNESSCOMMAND() /*---------------*/ local void             increaseBrightnessCommand(const int newBrightness)
+	#define DECREASEBRIGHTNESSCOMMAND() /*---------------*/ local void             decreaseBrightnessCommand(const int newBrightness)
+	#define SHOWWINDOWCOMMAND() /*-----------------------*/ local void             showWindowCommand(void)
+	#define RESTARTCOMMAND() /*--------------------------*/ local void             restartCommand(void)
+	#define EXITCOMMAND() /*-----------------------------*/ local void             exitCommand(void)
 	#define GETMONITORGAMMA() /*-------------------------*/ local bool             getMonitorGamma(void)
 	#define FINDLASTNONCLAMPED() /*----------------------*/ local uint             findLastNonClamped(const uint16 *current, const int size)
 	#define ROUNDDOUBLE() /*-----------------------------*/ local double           roundDouble(double number)
-	#define SETMONITORGAMMA() /*-------------------------*/ local void             setMonitorGamma(const int newBrightness, const uint8 operation)
+	#define SETMONITORGAMMA() /*-------------------------*/ local void             setMonitorGamma(const int newBrightness, const uint8 operation, const bool updateBrightness)
 	#define MIN() /*-------------------------------------*/ local double           min(const double x, const double y)
 	#define CANCELTHREADS() /*---------------------------*/ local void             cancelThreads(void)
 	#define FREEGLOBALS() /*-----------------------------*/ local void             freeGlobals(void)
@@ -632,8 +648,6 @@ SOFTWARE. */
 	local StringNodeRoot /*---------------*/ commandRoot;
 	local ShortcutNodeRoot /*-------------*/ keycodeShortcut;
 	local ShortcutNodeRoot /*-------------*/ buttonShortcut;
-	local bool /*-------------------------*/ acceptingShared;
-	local bool /*-------------------------*/ sharedHasArrived;
 	local xcb_generic_event_t * /*--------*/ event;
 	local uint /*-------------------------*/ eventToken;
 	local uint /*-------------------------*/ keyPressNextOffset;
@@ -668,6 +682,13 @@ SOFTWARE. */
 
 
 
+
+	local bool /*-------------------------*/ sharedMutexCreated;
+	local pthread_mutex_t /*--------------*/ *sharedMutex;
+	local bool /*-------------------------*/ sharedCondCreated;
+	local pthread_cond_t /*---------------*/ *sharedCond;
+	local bool /*-------------------------*/ sharedThreadCreated;
+	local pthread_t /*--------------------*/ sharedThread;
 
 	local bool /*-------------------------*/ sleepMutexCreated;
 	local pthread_mutex_t /*--------------*/ sleepMutex;
@@ -991,6 +1012,7 @@ SOFTWARE. */
 	EXEC();
 	SETMEMORY();
 	COPYMEMORY();
+	FINDSTRINGLENGTH();
 	GETTIMESTAMP();
 	GETPOINTERMONITOR();
 	CREATEIMAGEFROM();
@@ -998,6 +1020,14 @@ SOFTWARE. */
 	COMPOSITEIMAGESOVER();
 	COMPOSITEIMAGESAND();
 	TWOPASSBOXBLUR();
+	SETCONFIGVARIABLES();
+	SETWINDOWPROPERTIES();
+	SETBRIGHTNESSCOMMAND();
+	INCREASEBRIGHTNESSCOMMAND();
+	DECREASEBRIGHTNESSCOMMAND();
+	SHOWWINDOWCOMMAND();
+	RESTARTCOMMAND();
+	EXITCOMMAND();
 	GETMONITORGAMMA();
 	FINDLASTNONCLAMPED();
 	ROUNDDOUBLE();
@@ -1028,153 +1058,6 @@ SOFTWARE. */
 
 
 
-#define FINDSTRINGLENGTH() /*----*/ local uint findStringLength(const char *string)
-#define SETCONFIGVARIABLES() /*--*/ local void setConfigVariables(void)
-#define SETWINDOWPROPERTIES() /*-*/ local void setWindowProperties(void)
-
-FINDSTRINGLENGTH();
-SETCONFIGVARIABLES();
-SETWINDOWPROPERTIES();
-
-FINDSTRINGLENGTH(){
-	const char *current = string;
-	jmp advanceStringPointerLoop;
-	advanceStringPointerLoop:{
-		if(*current){
-			inc current;
-			jmp advanceStringPointerLoop;
-		}
-		ret current - string;
-	}
-}
-SETCONFIGVARIABLES(){
-	x = 0;
-	y = 0;
-	xOffset = 0;
-	yOffset = 0;
-	horizontalAlignment = NONE_HORIZONTAL_ALIGNMENT;
-	verticalAlignment = NONE_VERTICAL_ALIGNMENT;
-	width = 1;
-	height = 1;
-	whichMonitorUpdates = NONE_WHICH_MONITOR;
-	whichMonitorShows = NONE_WHICH_MONITOR;
-	foregroundColor = 0x00000000;
-	backgroundColor = 0x00000000;
-	unchangedBrightnessImage.data = NULL;
-	unchangedBrightnessImage.dataToken = 0;
-	increasedBrightnessImage.data = NULL;
-	increasedBrightnessImage.dataToken = 0;
-	decreasedBrightnessImage.data = NULL;
-	decreasedBrightnessImage.dataToken = 0;
-	commonOverlayImage.data = NULL;
-	commonOverlayImage.dataToken = 0;
-	commonUnderlayImage.data = NULL;
-	commonUnderlayImage.dataToken = 0;
-	blurSize = 1;
-	seconds = 0;
-	nanoseconds = 0;
-	ret;
-}
-SETWINDOWPROPERTIES(){
-	const char *const name = "microbrightness";
-	const char *const class = "microbrightness\0microbrightness\0";
-	const uint32 desktop = 0xFFFFFFFF;
-	const xcb_atom_t type = atom._NET_WM_WINDOW_TYPE_NORMAL;
-	const pid_t pid = getpid();
-	Monitor *current = monitorStart;
-	Monitor *const wall = current + monitorAllocated;
-	struct{
-		uint32 /*-*/ flags;
-		int32 /*--*/ x;
-		int32 /*--*/ y;
-		int32 /*--*/ width;
-		int32 /*--*/ height;
-		int32 /*--*/ minWidth;
-		int32 /*--*/ minHeight;
-		int32 /*--*/ maxWidth;
-		int32 /*--*/ maxHeight;
-		int32 /*--*/ widthInc;
-		int32 /*--*/ heightInc;
-		int32 /*--*/ minAspectNumerator;
-		int32 /*--*/ minAspectDenominarator;
-		int32 /*--*/ maxAspectNumerator;
-		int32 /*--*/ maxAspectDenominarator;
-		int32 /*--*/ baseWidth;
-		int32 /*--*/ baseHeight;
-		int32 /*--*/ winGravity;
-	} normalHints;
-	struct{
-		uint32 /*-*/ flags;
-		uint32 /*-*/ input;
-		uint32 /*-*/ initialState;
-	} hints;
-	char hostname[256];
-	uint hostnameLength;
-	xcb_atom_t state[3];
-	normalHints.flags = USER_POSITION_NORMAL_HINT | USER_SIZE_NORMAL_HINT | PROGRAM_MINIMUM_SIZE_NORMAL_HINT | PROGRAM_MAXIMUM_SIZE_NORMAL_HINT | PROGRAM_RESIZE_INCREMENT_NORMAL_HINT | PROGRAM_ASPECT_NORMAL_HINT | PROGRAM_BASE_SIZE_NORMAL_HINT | PROGRAM_WINDOW_GRAVITY_NORMAL_HINT;
-	normalHints.width = width;
-	normalHints.height = height;
-	normalHints.minWidth = width;
-	normalHints.minHeight = height;
-	normalHints.maxWidth = width;
-	normalHints.maxHeight = height;
-	normalHints.widthInc = 0;
-	normalHints.heightInc = 0;
-	normalHints.minAspectNumerator = 1;
-	normalHints.minAspectDenominarator = 1;
-	normalHints.maxAspectNumerator = 1;
-	normalHints.maxAspectDenominarator = 1;
-	normalHints.baseWidth = width;
-	normalHints.baseHeight = height;
-	normalHints.winGravity = XCB_GRAVITY_NORTH_WEST;
-	hints.flags = INPUT_HINT | STATE_HINT;
-	hints.input = false;
-	hints.initialState = NORMAL_STATE;
-	*hostname = '\0';
-	if(gethostname(hostname, countof(hostname)) != GETHOSTNAME_SUCCESS){
-		printTitledError("get hostname error", "could not get hostname");
-	}
-	hostnameLength = findStringLength(hostname);
-	*(state + 0) = atom._NET_WM_STATE_STICKY;
-	*(state + 1) = atom._NET_WM_STATE_SKIP_TASKBAR;
-	*(state + 2) = atom._NET_WM_STATE_SKIP_PAGER;
-	jmp loop;
-	loop:{
-		if(current < wall){
-			const xcb_window_t window = (*current).window;;
-			switch horizontalAlignment over
-				to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ normalHints.x = (*current).leftX; /*------------------------------*/ brk;
-				to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ normalHints.x = (*current).leftX + ((*current).w - width) / 2; /*-*/ brk;
-				to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ normalHints.x = (*current).rightX - width; /*---------------------*/ brk;
-				off: /*----------------------------*/ normalHints.x = x; /*---------------------------------------------*/ brk;
-			end
-			switch verticalAlignment over
-				to TOP_VERTICAL_ALIGNMENT: /*----*/ normalHints.y = (*current).topY; /*-------------------------------*/ brk;
-				to CENTER_VERTICAL_ALIGNMENT: /*-*/ normalHints.y = (*current).topY + ((*current).h - height) / 2; /*-*/ brk;
-				to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ normalHints.y = (*current).bottomY - height; /*-------------------*/ brk;
-				off: /*--------------------------*/ normalHints.y = y; /*---------------------------------------------*/ brk;
-			end
-			normalHints.x += xOffset;
-			normalHints.y += yOffset;
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_NAME, XCB_ATOM_STRING, bitsof(uint8), lengthof("microbrightness"), name);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_ICON_NAME, XCB_ATOM_STRING, bitsof(uint8), lengthof("microbrightness"), name);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_NORMAL_HINTS, atom.WM_SIZE_HINTS, bitsof(uint32), sizeof(normalHints) / sizeof(uint32), &normalHints);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_HINTS, atom.WM_HINTS, bitsof(uint32), sizeof(hints) / sizeof(uint32), &hints);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_CLASS, XCB_ATOM_STRING, bitsof(uint8), lengthof("microbrightness\0microbrightness\0"), class);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_CLIENT_MACHINE, XCB_ATOM_STRING, bitsof(uint8), hostnameLength, hostname);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_NAME, atom.UTF8_STRING, bitsof(uint8), lengthof("microbrightness"), name);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_ICON_NAME, atom.UTF8_STRING, bitsof(uint8), lengthof("microbrightness"), name);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &desktop);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_WINDOW_TYPE, XCB_ATOM_ATOM, bitsof(uint32), 1, &type);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_STATE, XCB_ATOM_ATOM, bitsof(uint32), countof(state), &state);
-			/*! xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_ICON, , , , ); */
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_PID, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &pid);
-			inc current;
-			jmp loop;
-		}
-		ret;
-	}
-}
 
 
 
@@ -1184,184 +1067,162 @@ SETWINDOWPROPERTIES(){
 
 
 
-#define PTHREAD_COND_BROADCAST_SUCCESS /*-*/ (0)
 
-#define SETBRIGHTNESSCOMMAND() /*---------*/ local void setBrightnessCommand(const int newBrightness)
-#define INCREASEBRIGHTNESSCOMMAND() /*----*/ local void increaseBrightnessCommand(const int newBrightness)
-#define DECREASEBRIGHTNESSCOMMAND() /*----*/ local void decreaseBrightnessCommand(const int newBrightness)
-#define SHOWWINDOWCOMMAND() /*------------*/ local void showWindowCommand(void)
-#define RESTARTCOMMAND() /*---------------*/ local void restartCommand(void)
-#define EXITCOMMAND() /*------------------*/ local void exitCommand(void)
 
-SETBRIGHTNESSCOMMAND();
-INCREASEBRIGHTNESSCOMMAND();
-DECREASEBRIGHTNESSCOMMAND();
-SHOWWINDOWCOMMAND();
-RESTARTCOMMAND();
-EXITCOMMAND();
 
-SETBRIGHTNESSCOMMAND(){
-	if(getMonitorGamma()){
-		setMonitorGamma(newBrightness, SET_BRIGHTNESS_OPERATION);
-		brightnessChanged = true;
-	}
-	ret;
-}
-INCREASEBRIGHTNESSCOMMAND(){
-	if(getMonitorGamma()){
-		setMonitorGamma(newBrightness, INCREASE_BRIGHTNESS_OPERATION);
-		brightnessChanged = true;
-	}
-	ret;
-}
-DECREASEBRIGHTNESSCOMMAND(){
-	if(getMonitorGamma()){
-		setMonitorGamma(newBrightness, DECREASE_BRIGHTNESS_OPERATION);
-		brightnessChanged = true;
-	}
-	ret;
-}
-SHOWWINDOWCOMMAND(){
-	const uint32 timestamp = getTimestamp();
+
+
+
+
+
+
+/*!
+SLEEPMAIN(){
 	Monitor *current;
 	Monitor *wall;
-	struct{
-		int32 /*--*/ x;
-		int32 /*--*/ y;
-		uint32 /*-*/ w;
-		uint32 /*-*/ h;
-		uint32 /*-*/ stackMode;
-	} valueList;
-	valueList.stackMode = XCB_STACK_MODE_ABOVE;
-	switch whichMonitorShows over
-		to POINTER_WHICH_MONITOR:{
-			current = getPointerMonitor();
-			wall = current + 1;
-			if(!getMonitorGamma()){
-				ret;
-			}
-			if(!brightnessChanged){
-				(*current).previousBrightness = (*current).brightness;
-			}
-			jmp mapWindowLoop;
+	(void)arg;
+	jmp waitIndefinitely;
+	waitIndefinitely:{
+		if(quittingThreads){
+			ret NULL;
 		}
-		to ALL_WHICH_MONITOR:{
-			current = monitorStart;
-			wall = current + monitorAllocated;
-			if(!getMonitorGamma()){
-				ret;
-			}
-			if(!brightnessChanged){
-				jmp resetAllMonitorPreviousBrightnessLoop;
-				resetAllMonitorPreviousBrightnessLoop:{
-					if(current < wall){
-						(*current).previousBrightness = (*current).brightness;
-						inc current;
-						jmp resetAllMonitorPreviousBrightnessLoop;
-					}
-					current = monitorStart;
-				}
-			}
-			jmp mapWindowLoop;
+		if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+			printTitledError("pthread error", "could not lock sleep mutex");
 		}
-		off:{
-			ret;
+		if(pthread_cond_wait(&sleepCond, &sleepMutex) != PTHREAD_COND_WAIT_SUCCESS){
+			printTitledError("pthread error", "could not wait sleep mutex");
 		}
+		if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+			printTitledError("pthread error", "could not unlock sleep mutex");
+		}
+		jmp waitUntilTimedOut;
 	}
-	mapWindowLoop:{
+	waitUntilTimedOut:{
+		struct timespec ts;
+		int waitReturn;
+		uint localSeconds;
+		uint localNanoseconds;
+		if(pthread_rwlock_rdlock(&globalsLock) != PTHREAD_RWLOCK_RDLOCK_SUCCESS){
+			printTitledError("pthread error", "could not lock globals read lock");
+		}
+		localSeconds = seconds;
+		localNanoseconds = nanoseconds;
+		if(pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+			printTitledError("pthread error", "could not unlock globals read lock");
+		}
+		clock_gettime(CLOCK_REALTIME, &ts);
+		ts.tv_sec += localSeconds;
+		ts.tv_nsec += localNanoseconds;
+		if(quittingThreads){
+			ret NULL;
+		}
+		if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+			printTitledError("pthread error", "could not lock sleep mutex");
+		}
+		waitReturn = pthread_cond_timedwait(&sleepCond, &sleepMutex, &ts);
+		if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+			printTitledError("pthread error", "could not unlock sleep mutex");
+		}
+		if(waitReturn != ETIMEDOUT){
+			if(waitReturn != PTHREAD_COND_TIMEDWAIT_SUCCESS){
+				printTitledError("pthread error", "could not wait sleep mutex");
+			}
+			jmp waitUntilTimedOut;
+		}
+		if(!globalsLockCreated){
+			jmp waitIndefinitely;
+		}
+		if(pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
+			printTitledError("pthread error", "could not lock globals write lock");
+		}
+		current = monitorStart;
+		wall = current + monitorAllocated;
+		jmp unmapWindowLoop;
+	}
+	unmapWindowLoop:{
 		if(current < wall){
-			switch horizontalAlignment over
-				to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ valueList.x = (*current).leftX; /*------------------------------*/ brk;
-				to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ valueList.x = (*current).leftX + ((*current).w - width) / 2; /*-*/ brk;
-				to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ valueList.x = (*current).rightX - width; /*---------------------*/ brk;
-				off: /*----------------------------*/ valueList.x = x; /*---------------------------------------------*/ brk;
-			end
-			switch verticalAlignment over
-				to TOP_VERTICAL_ALIGNMENT: /*----*/ valueList.y = (*current).topY; /*-------------------------------*/ brk;
-				to CENTER_VERTICAL_ALIGNMENT: /*-*/ valueList.y = (*current).topY + ((*current).h - height) / 2; /*-*/ brk;
-				to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ valueList.y = (*current).bottomY - height; /*-------------------*/ brk;
-				off: /*--------------------------*/ valueList.y = y; /*---------------------------------------------*/ brk;
-			end
-			valueList.x += xOffset;
-			valueList.y += yOffset;
-			valueList.w = width;
-			valueList.h = height;
-			xcb_configure_window(connection, (*current).window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_STACK_MODE, &valueList);
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, (*current).window, atom._NET_WM_USER_TIME, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &timestamp);
-			if(!(*current).windowMapped){
-				drawWindow(current);
+			if((*current).windowMapped){
+				xcb_unmap_window(connection, (*current).window);
+				(*current).windowMapped = false;
 			}
-			xcb_map_window(connection, (*current).window);
-			(*current).windowMapped = true;
 			inc current;
-			jmp mapWindowLoop;
+			jmp unmapWindowLoop;
 		}
-		jmp signalSleepThread;
+		xcb_flush(connection);
+		if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+			printTitledError("pthread error", "could not unlock globals write lock");
+		}
+		jmp waitIndefinitely;
 	}
-	signalSleepThread:{
-		if(sleepMutexCreated and sleepCondCreated){
-			if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
-				printTitledError("pthread error", "could not lock sleep mutex");
+	ret NULL;
+}
+*/
+
+
+
+
+
+
+
+
+
+local bool quittingSharedThread;
+
+#define SHAREDMAIN() /*-*/ local void *sharedMain(void *const arg)
+
+SHAREDMAIN();
+
+SHAREDMAIN(){
+	(void)arg;
+	if(pthread_mutex_lock(sharedMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+		printTitledError("pthread error", "could not lock shared mutex");
+	}
+	jmp waitIndefinitely;
+	waitIndefinitely:{
+		if(quittingSharedThread){
+			*((uint8 *)sharedStart + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t)) = FULL_SHARED_STATUS;
+			if(pthread_mutex_unlock(sharedMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+				printTitledError("pthread error", "could not unlock shared mutex");
 			}
-			if(pthread_cond_signal(&sleepCond) != PTHREAD_COND_SIGNAL_SUCCESS){
-				printTitledError("pthread error", "could not signal sleep thread");
-			}
-			if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-				printTitledError("pthread error", "could not unlock sleep mutex");
-			}
+			ret NULL;
 		}
-		if(windowMutexCreated and windowCondCreated){
-			if(pthread_mutex_lock(&windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
-				printTitledError("pthread error", "could not lock window mutex");
-			}
-			if(pthread_cond_broadcast(&windowCond) != PTHREAD_COND_BROADCAST_SUCCESS){
-				printTitledError("pthread error", "could not broadcast window threads");
-			}
-			if(pthread_mutex_unlock(&windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-				printTitledError("pthread error", "could not unlock window mutex");
-			}
+		if(pthread_cond_wait(sharedCond, sharedMutex) != PTHREAD_COND_WAIT_SUCCESS){
+			printTitledError("pthread error", "could not wait shared mutex");
 		}
-		ret;
+		sharedCurrent = sharedStart + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t);
+		if(*sharedCurrent == FULL_SHARED_STATUS){
+			if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
+				printTitledError("pthread error", "could not lock globals write lock");
+			}
+			*sharedCurrent = EMPTY_SHARED_STATUS;
+			inc sharedCurrent;
+			readConfig(false, "transmitter", getSharedCharacter);
+			if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+				printTitledError("pthread error", "could not unlock globals write lock");
+			}
+			*((uint8 *)sharedStart + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t)) = EMPTY_SHARED_STATUS;
+		}
+		jmp waitIndefinitely;
 	}
 }
-RESTARTCOMMAND(){
-	freeGlobals();
-	ungrabShortcuts();
-	resetShortcutRoot(&buttonShortcut);
-	resetShortcutRoot(&keycodeShortcut);
-	ret;
-}
-EXITCOMMAND(){
-	cancelThreads();
-	free(event);
-	popPointer(eventToken);
-	ungrabShortcuts();
-	freeGlobals();
-	freeMonitors();
-	xcb_disconnect(connection);
-	popPointer(connectionToken);
-	deleteShortcutRoot(&buttonShortcut);
-	deleteShortcutRoot(&keycodeShortcut);
-	deleteStringRoot(&commandRoot);
-	deleteStringRoot(&macroRoot);
-	deleteStringRoot(&modifierRoot);
-	deleteStringRoot(&imageVariableRoot);
-	deleteStringRoot(&imageCompositionOperationRoot);
-	deleteStringRoot(&whichMonitorRoot);
-	deleteStringRoot(&verticalAlignmentRoot);
-	deleteStringRoot(&horizontalAlignmentRoot);
-	deleteStringRoot(&variableRoot);
-	deleteStringRoot(&scope1ScopeInstructionRoot);
-	deleteStringRoot(&globalInstructionRoot);
-	deleteStringRoot(&globalScopesInstructionRoot);
-	shmDisconnect();
-	if(dynamicDataSegment.allocated > 1){
-		printError("%s%s: %s%s:%s %s", colorStart, programName, colorError, "warning", colorEnd, "program exited with unaccounted for data pointers, namely: ");
-		printUnaccountedForPointers(dynamicDataSegment.data + 1, dynamicDataSegment.data + dynamicDataSegment.allocated);
-	}
-	cleanup();
-	exit(EXIT_SUCCESS);
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1394,44 +1255,31 @@ int main(int argumentAmount, const char *const *argument){
 		jmp setGlobals;
 	}
 	setGlobals:{
-		programName /*---------*/ = *argument;
-		configPath /*----------*/ = NULL;
-		errorPath /*-----------*/ = NULL;
-		connectionName /*------*/ = NULL;
-		colorStart /*----------*/ = MESSAGE_START;
-		colorFatal /*----------*/ = MESSAGE_FATAL;
-		colorError /*----------*/ = MESSAGE_ERROR;
-		colorEvent /*----------*/ = MESSAGE_EVENT;
-		colorEnd /*------------*/ = MESSAGE_END;
-		mustOpenErrorStream /*-*/ = false;
-		errorStream /*---------*/ = DEFAULT_ERROR_STREAM;
-		errorStreamToken /*----*/ = 0;
-		quitting /*------------*/ = false;
-		connection /*----------*/ = NULL;
-		connectionToken /*-----*/ = 0;
-		monitorStart /*--------*/ = NULL;
-		monitorToken /*--------*/ = 0;
-		lastGlobalCommand /*---*/ = 0;
-		acceptingShared /*-----*/ = false;
-		sharedHasArrived /*----*/ = false;
-		event /*---------------*/ = NULL;
-		eventToken /*----------*/ = 0;
-
-
-
-		quittingThreads /*-----*/ = false;
-
-
-
+		programName /*----------*/ = *argument;
+		configPath /*-----------*/ = NULL;
+		errorPath /*------------*/ = NULL;
+		connectionName /*-------*/ = NULL;
+		colorStart /*-----------*/ = MESSAGE_START;
+		colorFatal /*-----------*/ = MESSAGE_FATAL;
+		colorError /*-----------*/ = MESSAGE_ERROR;
+		colorEvent /*-----------*/ = MESSAGE_EVENT;
+		colorEnd /*-------------*/ = MESSAGE_END;
+		mustOpenErrorStream /*--*/ = false;
+		errorStream /*----------*/ = DEFAULT_ERROR_STREAM;
+		errorStreamToken /*-----*/ = 0;
+		quitting /*-------------*/ = false;
+		connection /*-----------*/ = NULL;
+		connectionToken /*------*/ = 0;
+		monitorStart /*---------*/ = NULL;
+		monitorToken /*---------*/ = 0;
+		lastGlobalCommand /*----*/ = 0;
+		event /*----------------*/ = NULL;
+		eventToken /*-----------*/ = 0;
+		quittingSharedThread /*-*/ = false;
+		quittingThreads /*------*/ = false;
 		setConfigVariables();
-
-
-
 		initMemoryManager();
 		shmConnect();
-
-
-
 		{
 			pthread_rwlockattr_t attributes;
 			if(pthread_rwlockattr_init(&attributes) != PTHREAD_RWLOCKATTR_INIT_SUCCESS){
@@ -1448,32 +1296,22 @@ int main(int argumentAmount, const char *const *argument){
 				printTitledError("pthread error", "could not destroy global lock attributes");
 			}
 		}
-
-
-
 		sleepMutexCreated = pthread_mutex_init(&sleepMutex, NULL) == PTHREAD_MUTEX_INIT_SUCCESS;
 		sleepCondCreated = pthread_cond_init(&sleepCond, NULL) == PTHREAD_COND_INIT_SUCCESS;
+		windowMutexCreated = pthread_mutex_init(&windowMutex, NULL) == PTHREAD_MUTEX_INIT_SUCCESS;
+		windowCondCreated = pthread_cond_init(&windowCond, NULL) == PTHREAD_COND_INIT_SUCCESS;
 		if(!sleepMutexCreated){
 			printTitledError("pthread error", "could not init sleep mutex");
 		}
 		if(!sleepCondCreated){
 			printTitledError("pthread error", "could not init sleep cond");
 		}
-
-
-
-		windowMutexCreated = pthread_mutex_init(&windowMutex, NULL) == PTHREAD_MUTEX_INIT_SUCCESS;
-		windowCondCreated = pthread_cond_init(&windowCond, NULL) == PTHREAD_COND_INIT_SUCCESS;
 		if(!windowMutexCreated){
 			printTitledError("pthread error", "could not init window mutex");
 		}
 		if(!windowCondCreated){
 			printTitledError("pthread error", "could not init window cond");
 		}
-
-
-
-		setStringRoot(&globalScopesInstructionRoot);
 		setStringRoot(&globalInstructionRoot);
 		setStringRoot(&scope1ScopeInstructionRoot);
 		setStringRoot(&variableRoot);
@@ -1968,13 +1806,6 @@ int main(int argumentAmount, const char *const *argument){
 			uint32 /*---------*/ eventMask;
 			xcb_colormap_t /*-*/ colormap;
 		} valueList;
-
-
-
-		fprintf(stdout, "monitors\n");
-
-
-
 		reply = xcb_wait_for_reply(connection, xcb_randr_get_monitors_unchecked(connection, (*screen).root, true), NULL);
 		replyToken = pushPointer(reply, "monitor reply", iFree);
 		if(!reply){
@@ -2027,7 +1858,7 @@ int main(int argumentAmount, const char *const *argument){
 				(*monitorCurrent).windowMapped = false;
 				(*monitorCurrent).previousBrightness = -1;
 				(*monitorCurrent).brightness = -1;
-				(*monitorCurrent).dataStart = malloc(1 * sizeof(uint32));
+				(*monitorCurrent).dataStart = malloc(width * height * sizeof(uint32));
 				(*monitorCurrent).dataToken = pushPointer((*monitorCurrent).dataStart, "window color data pointer", iFree);
 				if(!(*monitorCurrent).dataToken){
 					printTitledError("memory allocation error", "could not allocate memory for window color data");
@@ -2087,8 +1918,8 @@ int main(int argumentAmount, const char *const *argument){
 						jmp iterateOutputLoop;
 					}
 				}
-				xcb_create_window(connection, depth, window, (*screen).root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP, &valueList);
-				xcb_create_pixmap(connection, depth, (*monitorCurrent).pixmap, window, 1, 1);
+				xcb_create_window(connection, depth, window, (*screen).root, 0, 0, width, height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP, &valueList);
+				xcb_create_pixmap(connection, depth, (*monitorCurrent).pixmap, window, width, height);
 				xcb_create_gc(connection, (*monitorCurrent).gc, (*monitorCurrent).pixmap, XCB_NONE, NULL);
 				xcb_change_window_attributes(connection, window, XCB_CW_BACK_PIXMAP, &(*monitorCurrent).pixmap);
 				(*monitorCurrent).windowThreadCreated = pthread_create(&(*monitorCurrent).windowThread, NULL, drawWindowMain, monitorCurrent) == PTHREAD_CREATE_SUCCESS;
@@ -2116,7 +1947,7 @@ int main(int argumentAmount, const char *const *argument){
 	}
 	storeMonitorsExit:{
 		if(event){
-			if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) == PTHREAD_RWLOCK_UNLOCK_SUCCESS){
+			if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
 				printTitledError("pthread error", "could not unlock globals write lock");
 			}
 			jmp eventLoop;
@@ -2222,10 +2053,8 @@ int main(int argumentAmount, const char *const *argument){
 		jmp waitForEvent;
 	}
 	waitForEvent:{
-		acceptingShared = true;
 		event = xcb_wait_for_event(connection);
 		eventToken = pushPointer(event, "event pointer", iFree);
-		acceptingShared = false;
 		if(event){
 			jmp switchEvent;
 		}
@@ -2446,26 +2275,6 @@ int main(int argumentAmount, const char *const *argument){
 		jmp eventLoopCheckShortcuts;
 	}
 	restartCommand:{
-
-
-
-
-
-
-
-
-
-		freeMonitors();
-		jmp storeMonitors;
-
-
-
-
-
-
-
-
-
 		jmp readConfig;
 	}
 	exitCommand:{
@@ -2517,47 +2326,11 @@ QUIT(){
 		to SIGSEGV: /*-*/ message = "segmentation faulted"; /*-*/ jmp exitWithError;
 		to SIGTERM: /*-*/ message = "terminated"; /*-----------*/ jmp exitWithError;
 		to SIGTRAP: /*-*/ message = "trapped"; /*--------------*/ jmp exitWithError;
-		to SIGUSR1: /*-*/ /*-----------------------------------*/ jmp handleIPCMessage;
-		to SIGUSR2: /*-*/ /*-----------------------------------*/ jmp handleIPCProtocolError;
+		to SIGUSR1: /*-*/ /*-----------------------------------*/ jmp handleUserSignal;
+		to SIGUSR2: /*-*/ /*-----------------------------------*/ jmp handleUserSignal;
 		off: /*--------*/ message = "unhandled signal"; /*-----*/ jmp exitWithError;
 	end
-	handleIPCMessage:{
-		if(!acceptingShared){
-			sharedHasArrived = true;
-			ret;
-		}
-		sharedHasArrived = false;
-		acceptingShared = false;
-		if(*sharedStart == FULL_SHARED_STATUS){
-			sharedCurrent = sharedStart;
-
-
-
-			if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
-				printTitledError("pthread error", "could not lock globals write lock");
-			}
-
-
-
-			readConfig(false, "transmitter", getSharedCharacter);
-
-
-
-			if(globalsLockCreated and pthread_rwlock_unlock(&globalsLock) != PTHREAD_RWLOCK_UNLOCK_SUCCESS){
-				printTitledError("pthread error", "could not unlock globals write lock");
-			}
-
-
-
-			*sharedStart = EMPTY_SHARED_STATUS;
-		}
-		acceptingShared = true;
-		processingSignal = false;
-		ret;
-	}
-	handleIPCProtocolError:{
-		shmDisconnect();
-		shmConnect();
+	handleUserSignal:{
 		processingSignal = false;
 		ret;
 	}
@@ -2602,7 +2375,8 @@ QUIT(){
 }
 GETSHAREDCHARACTER(){
 	(void)configFile;
-	ret *(inc sharedCurrent);
+	inc sharedCurrent;
+	ret *(sharedCurrent - 1);
 }
 INITMEMORYMANAGER(){
 	#define DYNAMIC_DATA_SEGMENT_BLOCK_SIZE /*-*/ (16)
@@ -2668,7 +2442,6 @@ POPPOINTER(){
 		}
 		if(pthread_mutex_lock(&memorySegmentMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock popPointer() mutex");
-			jmp emergencyExit;
 		}
 		(*(s.data + token)).data = NULL;
 		jmp trimSegmentLoop;
@@ -2695,7 +2468,6 @@ UPDATEPOINTER(){
 		}
 		if(pthread_mutex_lock(&memorySegmentMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock updatePointer() mutex");
-			jmp emergencyExit;
 		}
 		jmp updatePointer;
 	}
@@ -2725,8 +2497,13 @@ IFREE(){
 	ret 0;
 }
 ISHMCTL(){
-	shmctl((uint64)pointer, IPC_RMID, NULL);
+	#define SHMGET_FAILURE /*-*/ (-1)
+	const int shmid = (int64)pointer;
+	if(shmid != SHMGET_FAILURE){
+		shmctl(shmid, IPC_RMID, NULL);
+	}
 	ret 0;
+	#undef  SHMGET_FAILURE
 }
 IXCBDISCONNECT(){
 	xcb_disconnect(pointer);
@@ -2735,20 +2512,24 @@ IXCBDISCONNECT(){
 	#undef  DYNAMIC_DATA_SEGMENT_BLOCK_SIZE
 }
 SHMCONNECT(){
+	#define STAT_FAILURE /*---*/ (-1)
+	#define SHMGET_FAILURE /*-*/ (-1)
+	#define SHMAT_FAILURE /*--*/ ((void *)-1)
+	#define SHMCTL_FAILURE /*-*/ (-1)
+	#define SHMDT_FAILURE /*--*/ (-1)
 	#define STAT_PATH /*------*/ ("/tmp/" PROGRAM_NAME)
 	#define SHM_KEY /*--------*/ (((s.st_dev << 20) & 0xfff00000) | ((s.st_ino << 8) & 0x000fff00) | 0x00000045)
 	#define SHARED_SIZE /*----*/ (65536)
 	#define SHM_NONE /*-------*/ (0)
-	#define STAT_FAILURE /*---*/ (-1)
-	#define SHMGET_FAILURE /*-*/ (-1)
-	#define SHMAT_FAILURE /*--*/ (-1)
-	#define SHMCTL_FAILURE /*-*/ (-1)
-	#define SHMDT_FAILURE /*--*/ (-1)
 	def struct stat /*-*/ Stat;
 	FILE *file;
 	Stat s;
+	shmid = SHMGET_FAILURE;
 	shmidToken = 0;
+	sharedStart = SHMAT_FAILURE;
 	sharedToken = 0;
+	sharedMutex = NULL;
+	sharedCond = NULL;
 	jmp createKeyFile;
 	createKeyFile:{
 		uint token;
@@ -2762,7 +2543,6 @@ SHMCONNECT(){
 				ret;
 			}
 		}
-		fprintf(file, "%u\n", getpid());
 		fclose(file);
 		popPointer(token);
 		jmp getKeyFileStat;
@@ -2772,11 +2552,11 @@ SHMCONNECT(){
 			printTitledError("shared memory error", "could not generate shared memory key");
 			ret;
 		}
-		jmp generateSharedMemoryID;
+		jmp createSharedMemory;
 	}
-	generateSharedMemoryID:{
-		shmid = shmget(SHM_KEY, SHARED_SIZE, 0600 | IPC_CREAT);
-		shmidToken = pushPointer((void *)(uint64)shmid, "shm id", ishmctl);
+	createSharedMemory:{
+		shmid = shmget(SHM_KEY, SHARED_SIZE, IPC_CREAT | 0600);
+		shmidToken = pushPointer((void *)(int64)shmid, "shm id", ishmctl);
 		if(shmid == SHMGET_FAILURE){
 			printTitledError("shared memory error", "could not create shared memory segment");
 			ret;
@@ -2786,17 +2566,76 @@ SHMCONNECT(){
 	attachToSharedMemory:{
 		sharedStart = shmat(shmid, NULL, SHM_NONE);
 		sharedToken = pushPointer(sharedStart, "shared memory pointer", shmdt);
-		if(sharedStart == (void *)SHMAT_FAILURE){
+		if(sharedStart == SHMAT_FAILURE){
 			printTitledError("shared memory error", "could not attach to shared memory");
 			ret;
 		}
-		*sharedStart = EMPTY_SHARED_STATUS;
+		sharedMutex = (void *)sharedStart;
+		sharedCond = (void *)((uint8 *)sharedMutex + sizeof(pthread_mutex_t));
+		*(sharedStart + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t)) = EMPTY_SHARED_STATUS;
+		jmp createThreadObjects;
+	}
+	createThreadObjects:{
+		pthread_mutexattr_t mutexAttributes;
+		pthread_condattr_t condAttributes;
+		if(pthread_mutexattr_init(&mutexAttributes) != PTHREAD_MUTEXATTR_INIT_SUCCESS){
+			printTitledError("pthread error", "could not init shared mutex attributes");
+		}
+		if(pthread_mutexattr_setpshared(&mutexAttributes, PTHREAD_PROCESS_SHARED) != PTHREAD_MUTEXATTR_SETPSHARED_SUCCESS){
+			printTitledError("pthread error", "could not set shared mutex shared process attribute");
+		}
+		sharedMutexCreated = pthread_mutex_init(sharedMutex, &mutexAttributes) == PTHREAD_MUTEX_INIT_SUCCESS;
+		if(!sharedMutexCreated){
+			printTitledError("pthread error", "could not init shared mutex");
+		}
+		if(pthread_mutexattr_destroy(&mutexAttributes) != PTHREAD_MUTEXATTR_DESTROY_SUCCESS){
+			printTitledError("pthread error", "could not destroy shared mutex attributes");
+		}
+		if(pthread_condattr_init(&condAttributes) != PTHREAD_CONDATTR_INIT_SUCCESS){
+			printTitledError("pthread error", "could not init shared cond attributes");
+		}
+		if(pthread_condattr_setpshared(&condAttributes, PTHREAD_PROCESS_SHARED) != PTHREAD_CONDATTR_SETPSHARED_SUCCESS){
+			printTitledError("pthread error", "could not set shared cond shared process attribute");
+		}
+		sharedCondCreated = pthread_cond_init(sharedCond, &condAttributes) == PTHREAD_COND_INIT_SUCCESS;
+		if(!sharedCondCreated){
+			printTitledError("pthread error", "could not init shared cond");
+		}
+		if(pthread_condattr_destroy(&condAttributes) != PTHREAD_CONDATTR_DESTROY_SUCCESS){
+			printTitledError("pthread error", "could not destroy shared cond attributes");
+		}
+		sharedThreadCreated = pthread_create(&sharedThread, NULL, sharedMain, NULL) == PTHREAD_CREATE_SUCCESS;
+		if(!sharedThreadCreated){
+			printTitledError("pthread error", "could not create shared memory thread");
+		}
 		ret;
 	}
 	#undef  STAT_PATH
 }
 SHMDISCONNECT(){
-	jmp markForDeletion;
+	jmp destroyThreadObjects;
+	destroyThreadObjects:{
+		quittingSharedThread = true;
+		if(sharedThreadCreated){
+			if(pthread_join(sharedThread, NULL) != PTHREAD_JOIN_SUCCESS){
+				printTitledError("pthread error", "could not join shared thread");
+			}
+			sharedThreadCreated = false;
+		}
+		if(sharedCond and sharedCondCreated){
+			if(pthread_cond_destroy(sharedCond) != PTHREAD_COND_DESTROY_SUCCESS){
+				printTitledError("pthread error", "could not destroy shared cond");
+			}
+			sharedCondCreated = false;
+		}
+		if(sharedMutex and sharedMutexCreated){
+			if(pthread_mutex_destroy(sharedMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
+				printTitledError("pthread error", "could not destroy shared mutex");
+			}
+			sharedMutexCreated = false;
+		}
+		jmp markForDeletion;
+	}
 	markForDeletion:{
 		if(shmid != SHMGET_FAILURE and shmctl(shmid, IPC_RMID, NULL) == SHMCTL_FAILURE){
 			printTitledError("shared memory error", "could not mark shared memory for deletion");
@@ -2806,21 +2645,21 @@ SHMDISCONNECT(){
 		jmp detach;
 	}
 	detach:{
-		if(sharedStart != (void *)SHMAT_FAILURE and shmdt(sharedStart) == SHMDT_FAILURE){
+		if(sharedStart != SHMAT_FAILURE and shmdt(sharedStart) == SHMDT_FAILURE){
 			printTitledError("shared memory error", "could not detach from shared memory");
 			ret;
 		}
 		popPointer(sharedToken);
 		ret;
 	}
+	#undef  SHM_NONE
+	#undef  SHARED_SIZE
+	#undef  SHM_KEY
 	#undef  SHMDT_FAILURE
 	#undef  SHMCTL_FAILURE
 	#undef  SHMAT_FAILURE
 	#undef  SHMGET_FAILURE
 	#undef  STAT_FAILURE
-	#undef  SHM_NONE
-	#undef  SHARED_SIZE
-	#undef  SHM_KEY
 }
 IDENTIFYARGUMENT(){
 	if(*p != '-') jmp findValueArgument;
@@ -2915,12 +2754,10 @@ SLEEPMAIN(){
 		waitReturn = pthread_cond_timedwait(&sleepCond, &sleepMutex, &ts);
 		if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
 			printTitledError("pthread error", "could not unlock sleep mutex");
-			jmp waitIndefinitely;
 		}
 		if(waitReturn != ETIMEDOUT){
 			if(waitReturn != PTHREAD_COND_TIMEDWAIT_SUCCESS){
 				printTitledError("pthread error", "could not wait sleep mutex");
-				jmp waitIndefinitely;
 			}
 			jmp waitUntilTimedOut;
 		}
@@ -2929,7 +2766,6 @@ SLEEPMAIN(){
 		}
 		if(pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals write lock");
-			jmp waitIndefinitely;
 		}
 		current = monitorStart;
 		wall = current + monitorAllocated;
@@ -2956,30 +2792,14 @@ DRAWWINDOWMAIN(){
 	Monitor *const monitor = arg;
 	jmp waitIndefinitely;
 	waitIndefinitely:{
-
-
-
+		fprintf(stdout, "waiting\n");
 		if(quittingThreads){
+			fprintf(stdout, "                                                                                left\n");
 			ret NULL;
 		}
-
-
-
 		if(pthread_mutex_lock(&windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock window mutex");
 		}
-
-
-
-		if(quittingThreads){
-			if(pthread_mutex_unlock(&windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
-				printTitledError("pthread error", "could not unlock window mutex");
-			}
-			ret NULL;
-		}
-
-
-
 		if(pthread_cond_wait(&windowCond, &windowMutex) != PTHREAD_COND_WAIT_SUCCESS){
 			printTitledError("pthread error", "could not wait window mutex");
 		}
@@ -2989,15 +2809,9 @@ DRAWWINDOWMAIN(){
 		jmp waitUntilTimedOut;
 	}
 	waitUntilTimedOut:{
-
-
-
 		if(quittingThreads){
 			ret NULL;
 		}
-
-
-
 		if(pthread_rwlock_rdlock(&globalsLock) != PTHREAD_RWLOCK_RDLOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock globals read lock");
 		}
@@ -3115,7 +2929,16 @@ DRAWWINDOW(){
 
 
 		const uint percentage = (100 - brightness) * commonOverlayImage.height / 100;
-		compositeImages(&compositeImagesOver, commonOverlayImage.x, commonOverlayImage.y + percentage, &commonOverlayImage, 0, (image.height - commonOverlayImage.height) / 2 + percentage, &image);
+
+
+
+		compositeImages(&compositeImagesOver,
+									commonOverlayImage.x,
+									commonOverlayImage.y + percentage,
+		&commonOverlayImage,
+									0,
+									(image.height - commonOverlayImage.height) / 2 + percentage,
+		&image);
 
 
 
@@ -5768,6 +5591,7 @@ READIMAGE(){
 		uint32 *current = start;
 		uint multipleCounter = 0;
 		uint32 *currentWall = current + width;
+		jmp readRowLoop;
 		readRowLoop:{
 			if(fread(current, sizeof(uint8), amount, file) != amount){
 				if(current == start){
@@ -5791,8 +5615,8 @@ READIMAGE(){
 				currentWall -= width;
 				jmp readRowLoop;
 			}
+			jmp successfulImage;
 		}
-		jmp successfulImage;
 	}
 	successfulImage:{
 		fclose(file);
@@ -5916,11 +5740,9 @@ SETMEMORY(){
 	}
 }
 COPYMEMORY(){
-	const uint largeAmount = byteAmount / sizeof(uint64);
-	const uint smallAmount = byteAmount % sizeof(uint64);
-	void *sourceCurrent = sourceStart;
+	const void *sourceCurrent = sourceStart;
+	const void *sourceWall = (uint64 *)sourceCurrent + byteAmount / sizeof(uint64);
 	void *destinationCurrent = destinationStart;
-	void *sourceWall = (uint64 *)sourceCurrent + largeAmount;
 	jmp largeLoop;
 	largeLoop:{
 		if((uint64 *)sourceCurrent < (uint64 *)sourceWall){
@@ -5929,7 +5751,7 @@ COPYMEMORY(){
 			destinationCurrent = (uint64 *)destinationCurrent + 1;
 			jmp largeLoop;
 		}
-		sourceWall = (uint8 *)sourceCurrent + smallAmount;
+		sourceWall = (uint8 *)sourceCurrent + byteAmount % sizeof(uint64);
 		jmp smallLoop;
 	}
 	smallLoop:{
@@ -5940,6 +5762,17 @@ COPYMEMORY(){
 			jmp smallLoop;
 		}
 		ret;
+	}
+}
+FINDSTRINGLENGTH(){
+	const char *current = string;
+	jmp advanceStringPointerLoop;
+	advanceStringPointerLoop:{
+		if(*current){
+			inc current;
+			jmp advanceStringPointerLoop;
+		}
+		ret current - string;
 	}
 }
 GETTIMESTAMP(){
@@ -6384,6 +6217,304 @@ TWOPASSBOXBLUR(){
 	free(pixelBStart);
 	ret;
 }
+SETCONFIGVARIABLES(){
+	x = 0;
+	y = 0;
+	xOffset = 0;
+	yOffset = 0;
+	horizontalAlignment = NONE_HORIZONTAL_ALIGNMENT;
+	verticalAlignment = NONE_VERTICAL_ALIGNMENT;
+	width = 1;
+	height = 1;
+	whichMonitorUpdates = NONE_WHICH_MONITOR;
+	whichMonitorShows = NONE_WHICH_MONITOR;
+	foregroundColor = 0x00000000;
+	backgroundColor = 0x00000000;
+	unchangedBrightnessImage.data = NULL;
+	unchangedBrightnessImage.dataToken = 0;
+	increasedBrightnessImage.data = NULL;
+	increasedBrightnessImage.dataToken = 0;
+	decreasedBrightnessImage.data = NULL;
+	decreasedBrightnessImage.dataToken = 0;
+	commonOverlayImage.data = NULL;
+	commonOverlayImage.dataToken = 0;
+	commonUnderlayImage.data = NULL;
+	commonUnderlayImage.dataToken = 0;
+	blurSize = 1;
+	seconds = 0;
+	nanoseconds = 0;
+	ret;
+}
+SETWINDOWPROPERTIES(){
+	const char *const name = "microbrightness";
+	const char *const class = "microbrightness\0microbrightness\0";
+	const uint32 desktop = 0xFFFFFFFF;
+	const xcb_atom_t type = atom._NET_WM_WINDOW_TYPE_NORMAL;
+	const pid_t pid = getpid();
+	Monitor *current = monitorStart;
+	Monitor *const wall = current + monitorAllocated;
+	struct{
+		uint32 /*-*/ flags;
+		int32 /*--*/ x;
+		int32 /*--*/ y;
+		int32 /*--*/ width;
+		int32 /*--*/ height;
+		int32 /*--*/ minWidth;
+		int32 /*--*/ minHeight;
+		int32 /*--*/ maxWidth;
+		int32 /*--*/ maxHeight;
+		int32 /*--*/ widthInc;
+		int32 /*--*/ heightInc;
+		int32 /*--*/ minAspectNumerator;
+		int32 /*--*/ minAspectDenominarator;
+		int32 /*--*/ maxAspectNumerator;
+		int32 /*--*/ maxAspectDenominarator;
+		int32 /*--*/ baseWidth;
+		int32 /*--*/ baseHeight;
+		int32 /*--*/ winGravity;
+	} normalHints;
+	struct{
+		uint32 /*-*/ flags;
+		uint32 /*-*/ input;
+		uint32 /*-*/ initialState;
+	} hints;
+	char hostname[256];
+	uint hostnameLength;
+	xcb_atom_t state[3];
+	normalHints.flags = USER_POSITION_NORMAL_HINT | USER_SIZE_NORMAL_HINT | PROGRAM_MINIMUM_SIZE_NORMAL_HINT | PROGRAM_MAXIMUM_SIZE_NORMAL_HINT | PROGRAM_RESIZE_INCREMENT_NORMAL_HINT | PROGRAM_ASPECT_NORMAL_HINT | PROGRAM_BASE_SIZE_NORMAL_HINT | PROGRAM_WINDOW_GRAVITY_NORMAL_HINT;
+	normalHints.width = width;
+	normalHints.height = height;
+	normalHints.minWidth = width;
+	normalHints.minHeight = height;
+	normalHints.maxWidth = width;
+	normalHints.maxHeight = height;
+	normalHints.widthInc = 0;
+	normalHints.heightInc = 0;
+	normalHints.minAspectNumerator = 1;
+	normalHints.minAspectDenominarator = 1;
+	normalHints.maxAspectNumerator = 1;
+	normalHints.maxAspectDenominarator = 1;
+	normalHints.baseWidth = width;
+	normalHints.baseHeight = height;
+	normalHints.winGravity = XCB_GRAVITY_NORTH_WEST;
+	hints.flags = INPUT_HINT | STATE_HINT;
+	hints.input = false;
+	hints.initialState = NORMAL_STATE;
+	*hostname = '\0';
+	if(gethostname(hostname, countof(hostname)) != GETHOSTNAME_SUCCESS){
+		printTitledError("get hostname error", "could not get hostname");
+	}
+	hostnameLength = findStringLength(hostname);
+	*(state + 0) = atom._NET_WM_STATE_STICKY;
+	*(state + 1) = atom._NET_WM_STATE_SKIP_TASKBAR;
+	*(state + 2) = atom._NET_WM_STATE_SKIP_PAGER;
+	jmp loop;
+	loop:{
+		if(current < wall){
+			const xcb_window_t window = (*current).window;;
+			switch horizontalAlignment over
+				to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ normalHints.x = (*current).leftX; /*------------------------------*/ brk;
+				to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ normalHints.x = (*current).leftX + ((*current).w - width) / 2; /*-*/ brk;
+				to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ normalHints.x = (*current).rightX - width; /*---------------------*/ brk;
+				off: /*----------------------------*/ normalHints.x = x; /*---------------------------------------------*/ brk;
+			end
+			switch verticalAlignment over
+				to TOP_VERTICAL_ALIGNMENT: /*----*/ normalHints.y = (*current).topY; /*-------------------------------*/ brk;
+				to CENTER_VERTICAL_ALIGNMENT: /*-*/ normalHints.y = (*current).topY + ((*current).h - height) / 2; /*-*/ brk;
+				to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ normalHints.y = (*current).bottomY - height; /*-------------------*/ brk;
+				off: /*--------------------------*/ normalHints.y = y; /*---------------------------------------------*/ brk;
+			end
+			normalHints.x += xOffset;
+			normalHints.y += yOffset;
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_NAME, XCB_ATOM_STRING, bitsof(uint8), lengthof("microbrightness"), name);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_ICON_NAME, XCB_ATOM_STRING, bitsof(uint8), lengthof("microbrightness"), name);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_NORMAL_HINTS, atom.WM_SIZE_HINTS, bitsof(uint32), sizeof(normalHints) / sizeof(uint32), &normalHints);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_HINTS, atom.WM_HINTS, bitsof(uint32), sizeof(hints) / sizeof(uint32), &hints);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_CLASS, XCB_ATOM_STRING, bitsof(uint8), lengthof("microbrightness\0microbrightness\0"), class);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom.WM_CLIENT_MACHINE, XCB_ATOM_STRING, bitsof(uint8), hostnameLength, hostname);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_NAME, atom.UTF8_STRING, bitsof(uint8), lengthof("microbrightness"), name);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_ICON_NAME, atom.UTF8_STRING, bitsof(uint8), lengthof("microbrightness"), name);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_DESKTOP, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &desktop);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_WINDOW_TYPE, XCB_ATOM_ATOM, bitsof(uint32), 1, &type);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_STATE, XCB_ATOM_ATOM, bitsof(uint32), countof(state), &state);
+			/*! xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_ICON, , , , ); */
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, atom._NET_WM_PID, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &pid);
+			inc current;
+			jmp loop;
+		}
+		ret;
+	}
+}
+SETBRIGHTNESSCOMMAND(){
+	if(getMonitorGamma()){
+		setMonitorGamma(newBrightness, SET_BRIGHTNESS_OPERATION, true);
+		brightnessChanged = true;
+	}
+	ret;
+}
+INCREASEBRIGHTNESSCOMMAND(){
+	if(getMonitorGamma()){
+		setMonitorGamma(newBrightness, INCREASE_BRIGHTNESS_OPERATION, true);
+		brightnessChanged = true;
+	}
+	ret;
+}
+DECREASEBRIGHTNESSCOMMAND(){
+	if(getMonitorGamma()){
+		setMonitorGamma(newBrightness, DECREASE_BRIGHTNESS_OPERATION, true);
+		brightnessChanged = true;
+	}
+	ret;
+}
+SHOWWINDOWCOMMAND(){
+	const uint32 timestamp = getTimestamp();
+	Monitor *current;
+	Monitor *wall;
+	struct{
+		int32 /*--*/ x;
+		int32 /*--*/ y;
+		uint32 /*-*/ w;
+		uint32 /*-*/ h;
+		uint32 /*-*/ stackMode;
+	} valueList;
+	valueList.stackMode = XCB_STACK_MODE_ABOVE;
+	switch whichMonitorShows over
+		to POINTER_WHICH_MONITOR:{
+			current = getPointerMonitor();
+			wall = current + 1;
+			if(!brightnessChanged){
+				if(!getMonitorGamma()){
+					ret;
+				}
+				setMonitorGamma(0, INCREASE_BRIGHTNESS_OPERATION, false);
+				brightnessChanged = true;
+			}
+			if(!brightnessChanged){
+				(*current).previousBrightness = (*current).brightness;
+			}
+			jmp mapWindowLoop;
+		}
+		to ALL_WHICH_MONITOR:{
+			current = monitorStart;
+			wall = current + monitorAllocated;
+			if(!brightnessChanged){
+				if(!getMonitorGamma()){
+					ret;
+				}
+				setMonitorGamma(0, INCREASE_BRIGHTNESS_OPERATION, false);
+				brightnessChanged = true;
+			}
+			if(!brightnessChanged){
+				jmp resetAllMonitorPreviousBrightnessLoop;
+				resetAllMonitorPreviousBrightnessLoop:{
+					if(current < wall){
+						(*current).previousBrightness = (*current).brightness;
+						inc current;
+						jmp resetAllMonitorPreviousBrightnessLoop;
+					}
+					current = monitorStart;
+				}
+			}
+			jmp mapWindowLoop;
+		}
+		off:{
+			ret;
+		}
+	}
+	mapWindowLoop:{
+		if(current < wall){
+			switch horizontalAlignment over
+				to LEFT_HORIZONTAL_ALIGNMENT: /*---*/ valueList.x = (*current).leftX; /*------------------------------*/ brk;
+				to CENTER_HORIZONTAL_ALIGNMENT: /*-*/ valueList.x = (*current).leftX + ((*current).w - width) / 2; /*-*/ brk;
+				to RIGHT_HORIZONTAL_ALIGNMENT: /*--*/ valueList.x = (*current).rightX - width; /*---------------------*/ brk;
+				off: /*----------------------------*/ valueList.x = x; /*---------------------------------------------*/ brk;
+			end
+			switch verticalAlignment over
+				to TOP_VERTICAL_ALIGNMENT: /*----*/ valueList.y = (*current).topY; /*-------------------------------*/ brk;
+				to CENTER_VERTICAL_ALIGNMENT: /*-*/ valueList.y = (*current).topY + ((*current).h - height) / 2; /*-*/ brk;
+				to BOTTOM_VERTICAL_ALIGNMENT: /*-*/ valueList.y = (*current).bottomY - height; /*-------------------*/ brk;
+				off: /*--------------------------*/ valueList.y = y; /*---------------------------------------------*/ brk;
+			end
+			valueList.x += xOffset;
+			valueList.y += yOffset;
+			valueList.w = width;
+			valueList.h = height;
+			xcb_configure_window(connection, (*current).window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT | XCB_CONFIG_WINDOW_STACK_MODE, &valueList);
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, (*current).window, atom._NET_WM_USER_TIME, XCB_ATOM_CARDINAL, bitsof(uint32), 1, &timestamp);
+			if(!(*current).windowMapped){
+				drawWindow(current);
+			}
+			xcb_map_window(connection, (*current).window);
+			(*current).windowMapped = true;
+			inc current;
+			jmp mapWindowLoop;
+		}
+		jmp signalSleepThread;
+	}
+	signalSleepThread:{
+		if(sleepMutexCreated and sleepCondCreated){
+			if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+				printTitledError("pthread error", "could not lock sleep mutex");
+			}
+			if(pthread_cond_signal(&sleepCond) != PTHREAD_COND_SIGNAL_SUCCESS){
+				printTitledError("pthread error", "could not signal sleep thread");
+			}
+			if(pthread_mutex_unlock(&sleepMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+				printTitledError("pthread error", "could not unlock sleep mutex");
+			}
+		}
+		if(windowMutexCreated and windowCondCreated){
+			if(pthread_mutex_lock(&windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
+				printTitledError("pthread error", "could not lock window mutex");
+			}
+			if(pthread_cond_broadcast(&windowCond) != PTHREAD_COND_BROADCAST_SUCCESS){
+				printTitledError("pthread error", "could not broadcast window threads");
+			}
+			if(pthread_mutex_unlock(&windowMutex) != PTHREAD_MUTEX_UNLOCK_SUCCESS){
+				printTitledError("pthread error", "could not unlock window mutex");
+			}
+		}
+		ret;
+	}
+}
+RESTARTCOMMAND(){
+	freeGlobals();
+	ungrabShortcuts();
+	resetShortcutRoot(&buttonShortcut);
+	resetShortcutRoot(&keycodeShortcut);
+	ret;
+}
+EXITCOMMAND(){
+	cancelThreads();
+	free(event);
+	popPointer(eventToken);
+	ungrabShortcuts();
+	freeGlobals();
+	freeMonitors();
+	xcb_disconnect(connection);
+	popPointer(connectionToken);
+	deleteShortcutRoot(&buttonShortcut);
+	deleteShortcutRoot(&keycodeShortcut);
+	deleteStringRoot(&commandRoot);
+	deleteStringRoot(&macroRoot);
+	deleteStringRoot(&modifierRoot);
+	deleteStringRoot(&imageVariableRoot);
+	deleteStringRoot(&imageCompositionOperationRoot);
+	deleteStringRoot(&whichMonitorRoot);
+	deleteStringRoot(&verticalAlignmentRoot);
+	deleteStringRoot(&horizontalAlignmentRoot);
+	deleteStringRoot(&variableRoot);
+	deleteStringRoot(&scope1ScopeInstructionRoot);
+	deleteStringRoot(&globalInstructionRoot);
+	deleteStringRoot(&globalScopesInstructionRoot);
+	shmDisconnect();
+	if(dynamicDataSegment.allocated > 1){
+		printError("%s%s: %s%s:%s %s", colorStart, programName, colorError, "warning", colorEnd, "program exited with unaccounted for data pointers, namely: ");
+		printUnaccountedForPointers(dynamicDataSegment.data + 1, dynamicDataSegment.data + dynamicDataSegment.allocated);
+	}
+	cleanup();
+	exit(EXIT_SUCCESS);
+}
 GETMONITORGAMMA(){
 	#define GAMMA_COOKIE_DATA_SIZE /*-*/ (16)
 	Monitor *monitorCurrent = monitorStart;
@@ -6672,7 +6803,9 @@ SETMONITORGAMMA(){
 							inc blue;
 							jmp setCRTCGammaInputsLoop;
 						}
-						xcb_randr_set_crtc_gamma(connection, (*crtcCurrent).crtc, (*crtcCurrent).gammaSize, (*crtcCurrent).red, (*crtcCurrent).green, (*crtcCurrent).blue);
+						if(updateBrightness){
+							xcb_randr_set_crtc_gamma(connection, (*crtcCurrent).crtc, (*crtcCurrent).gammaSize, (*crtcCurrent).red, (*crtcCurrent).green, (*crtcCurrent).blue);
+						}
 						inc crtcCurrent;
 						jmp setCRTCGammaLoop;
 					}
@@ -6714,6 +6847,7 @@ CANCELTHREADS(){
 			printTitledError("pthread error", "could not unlock window mutex");
 		}
 	}
+	fprintf(stdout, "1\n");
 	jmp joinWindowThreadLoop;
 	joinWindowThreadLoop:{
 		if(current < wall){
@@ -6727,6 +6861,7 @@ CANCELTHREADS(){
 			jmp joinWindowThreadLoop;
 		}
 	}
+	fprintf(stdout, "2\n");
 	if(windowCondCreated){
 		if(pthread_cond_destroy(&windowCond) != PTHREAD_COND_DESTROY_SUCCESS){
 			printTitledError("pthread error", "could not destroy window cond");
@@ -6739,6 +6874,7 @@ CANCELTHREADS(){
 		}
 		windowMutexCreated = false;
 	}
+	fprintf(stdout, "3\n");
 	if(sleepMutexCreated and sleepCondCreated){
 		if(pthread_mutex_lock(&sleepMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock sleep mutex");
@@ -6750,12 +6886,14 @@ CANCELTHREADS(){
 			printTitledError("pthread error", "could not unlock sleep mutex");
 		}
 	}
+	fprintf(stdout, "4\n");
 	if(sleepThreadCreated){
 		if(pthread_join(sleepThread, NULL) != PTHREAD_JOIN_SUCCESS){
 			printTitledError("pthread error", "could not join sleep thread");
 		}
 		sleepThreadCreated = false;
 	}
+	fprintf(stdout, "5\n");
 	if(sleepCondCreated){
 		if(pthread_cond_destroy(&sleepCond) != PTHREAD_COND_DESTROY_SUCCESS){
 			printTitledError("pthread error", "could not destroy sleep cond");
@@ -6793,13 +6931,7 @@ FREEGLOBALS(){
 FREEMONITORS(){
 	Monitor *current = monitorStart;
 	Monitor *const wall = current + monitorAllocated;
-
-
-
 	quittingThreads = true;
-
-
-
 	if(windowMutexCreated and windowCondCreated){
 		if(pthread_mutex_lock(&windowMutex) != PTHREAD_MUTEX_LOCK_SUCCESS){
 			printTitledError("pthread error", "could not lock window mutex");
@@ -6811,15 +6943,9 @@ FREEMONITORS(){
 			printTitledError("pthread error", "could not unlock window mutex");
 		}
 	}
-
-
-
 	if(globalsLockCreated and pthread_rwlock_wrlock(&globalsLock) != PTHREAD_RWLOCK_WRLOCK_SUCCESS){
 		printTitledError("pthread error", "could not lock globals write lock");
 	}
-
-
-
 	jmp freeMonitorCRTCLoop;
 	freeMonitorCRTCLoop:{
 		if(current < wall){
@@ -6831,6 +6957,7 @@ FREEMONITORS(){
 					if(pthread_join((*current).windowThread, NULL) != PTHREAD_JOIN_SUCCESS){
 						printTitledError("pthread error", "could not join window thread");
 					}
+					fprintf(stdout, "joined\n");
 					(*current).windowThreadCreated = false;
 				}
 				jmp freeCRTCDataLoop;
@@ -6856,21 +6983,6 @@ FREEMONITORS(){
 				jmp freeMonitorCRTCLoop;
 			}
 		}
-		jmp destroyGlobalWindowThreadObjects;
-	}
-	destroyGlobalWindowThreadObjects:{
-		if(windowCondCreated){
-			if(pthread_cond_destroy(&windowCond) != PTHREAD_COND_DESTROY_SUCCESS){
-				printTitledError("pthread error", "could not destroy window cond");
-			}
-			windowCondCreated = false;
-		}
-		if(windowMutexCreated){
-			if(pthread_mutex_destroy(&windowMutex) != PTHREAD_MUTEX_DESTROY_SUCCESS){
-				printTitledError("pthread error", "could not destroy window mutex");
-			}
-			windowMutexCreated = false;
-		}
 		jmp freeMonitors;
 	}
 	freeMonitors:{
@@ -6878,13 +6990,7 @@ FREEMONITORS(){
 		popPointer(monitorToken);
 		monitorStart = NULL;
 		monitorToken = 0;
-
-
-
 		quittingThreads = false;
-
-
-
 		ret;
 	}
 }
